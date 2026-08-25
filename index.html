@@ -4,7 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>SMC 掃描器 - 完整交易試算版</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- 🌐 網路優化 1：預先建立 API 與 CDN 連線 (DNS Prefetch / Preconnect) -->
+    <link rel="preconnect" href="https://fapi.binance.com" crossorigin>
+    <link rel="dns-prefetch" href="https://fapi.binance.com">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+
+    <!-- 🌐 網路優化 2：Defer 載入 Chart.js 避免阻塞畫面渲染 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+
     <style>
         :root {
             --bg-primary: #0d1117;
@@ -182,7 +190,6 @@
         .form-group label { font-size: 11px; color: var(--text-secondary); }
         .form-group input { font-size: 13px; padding: 6px; }
         
-        /* 📊 升級版結果欄位網格 */
         .calc-results { 
             background-color: #0d1117; 
             border: 1px solid var(--border-color); 
@@ -205,7 +212,7 @@
             <h1>🎯 SMC 掃描器</h1>
             <div class="status-badge">
                 <span class="status-dot"></span>
-                <span>REST API 模式</span>
+                <span>REST API 快取模式</span>
             </div>
         </div>
     </header>
@@ -293,7 +300,6 @@
                     </div>
                 </div>
 
-                <!-- 📊 新增買入金額、槓桿與止盈止損金額欄位 -->
                 <div class="calc-results">
                     <div class="result-item">
                         <span class="result-label">建議進場點</span>
@@ -347,12 +353,12 @@
 
         const MIN_VOLUME_USDT = 100000000;
 
-        window.onload = function() {
+        window.addEventListener('DOMContentLoaded', () => {
             initModalChart();
             loadTgSettings();
             scanAllMarketSMC();
             startPollingLatestPrices();
-        };
+        });
 
         function switchTab(tabDirection) {
             currentTab = tabDirection;
@@ -438,7 +444,8 @@
             const targetSymbols = await fetchHighVolumeSymbols();
             logEvent(`⚡ 符合標的共 ${targetSymbols.length} 個，開始 SMC 掃描...`);
 
-            const BATCH_SIZE = 10;
+            /* 🌐 網路優化 3：調大并发批次量，提升併發處理效率，加快掃描速度 */
+            const BATCH_SIZE = 15;
             let completed = 0;
 
             for (let i = 0; i < targetSymbols.length; i += BATCH_SIZE) {
@@ -449,15 +456,18 @@
                         const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=15m&limit=35`);
                         if (!res.ok) return;
                         const rawKlines = await res.json();
-                        const klines = rawKlines.map(k => ({
+                        
+                        // 快取完整 K 線資料（包含時間戳記與收盤價），供彈窗繪圖使用
+                        const parsedKlines = rawKlines.map(k => ({
+                            time: k[0],
                             high: parseFloat(k[2]),
                             low: parseFloat(k[3]),
                             close: parseFloat(k[4])
                         }));
 
-                        const smcResult = detectSMC(klines);
+                        const smcResult = detectSMC(parsedKlines);
                         if (smcResult) {
-                            const latestPrice = klines[klines.length - 1].close;
+                            const latestPrice = parsedKlines[parsedKlines.length - 1].close;
                             marketDataMap[symbol] = {
                                 symbol: symbol,
                                 price: latestPrice,
@@ -468,7 +478,8 @@
                                 timeframe: "15m",
                                 direction: smcResult.direction,
                                 entry: latestPrice,
-                                stopLoss: smcResult.stopLoss
+                                stopLoss: smcResult.stopLoss,
+                                cachedKlines: parsedKlines // 🌐 快取 K線，避免開啟彈窗時重複向網路請求
                             };
                             checkAndSendTgAlert(symbol, smcResult, latestPrice);
                         }
@@ -480,7 +491,7 @@
 
                 progressBar.style.width = `${Math.floor((completed / targetSymbols.length) * 100)}%`;
                 renderTable();
-                await new Promise(r => setTimeout(r, 50));
+                await new Promise(r => setTimeout(r, 20));
             }
 
             isScanning = false;
@@ -568,7 +579,9 @@
         function renderTable() {
             const filter = document.getElementById("strategyFilter").value;
             const tbody = document.getElementById("scannerTableBody");
-            tbody.innerHTML = "";
+            
+            /* 🌐 DOM 優化：使用 Fragment 降低瀏覽器 Reflow / Repaint 次數 */
+            const fragment = document.createDocumentFragment();
 
             const allItems = Object.values(marketDataMap);
             const longItems = allItems.filter(i => i.direction === "LONG");
@@ -601,8 +614,11 @@
                     <td><span class="tag tag-strategy">${item.strategyCode}</span></td>
                     <td><button style="padding: 4px 8px; font-size: 11px;">📊 試算</button></td>
                 `;
-                tbody.appendChild(tr);
+                fragment.appendChild(tr);
             });
+
+            tbody.innerHTML = "";
+            tbody.appendChild(fragment);
         }
 
         function openTradeModal(item) {
@@ -612,8 +628,12 @@
             const modal = document.getElementById("tradeModal");
             modal.style.display = "flex";
 
-            calculateTradePlan();
-            loadModalChartData(item.symbol);
+            /* 🌐 網路優化 4：若記憶體內已有 K 線快取，直接渲染圖表，不再發起 HTTP 請求 */
+            if (item.cachedKlines && item.cachedKlines.length > 0) {
+                renderModalChartFromCache(item.cachedKlines);
+            } else {
+                loadModalChartData(item.symbol);
+            }
         }
 
         function closeModal() {
@@ -624,7 +644,6 @@
             if (e.target.classList.contains('modal-overlay')) closeModal();
         }
 
-        /* 🧮 試算核心邏輯：計算買入金額、槓桿與止盈止損金額 */
         function calculateTradePlan() {
             if (!currentModalItem) return;
 
@@ -636,22 +655,12 @@
             const leverage = parseFloat(document.getElementById("inputLeverage").value) || 1;
             const rr = parseFloat(document.getElementById("inputRR").value) || 1;
 
-            // 計算價差百分比
             const priceRiskRatio = Math.abs(entry - sl) / entry;
-
-            // 目標止盈價格
             let tp = dir === "LONG" ? entry + (entry - sl) * rr : entry - (sl - entry) * rr;
-
-            // 總買入金額（名義價值 Position Size）= 設定最大虧損金額 / 風險比例
             let positionSize = priceRiskRatio > 0 ? lossUsdt / priceRiskRatio : 0;
-
-            // 保證金（實際本金投入）= 名義價值 / 槓桿
             let margin = positionSize / leverage;
-
-            // 預計止盈金額 = 止損金額 * 風報比 R:R
             let profitUsdt = lossUsdt * rr;
 
-            // 更新至 UI 顯示
             document.getElementById("resEntry").innerText = `$${entry}`;
             document.getElementById("resLeverage").innerText = `${leverage}x`;
             document.getElementById("resMargin").innerText = `$${margin.toFixed(2)} USDT`;
@@ -666,6 +675,20 @@
             updateModalChartLines(entry, sl, tp);
         }
 
+        // 🌐 從快取資料繪製圖表 (零網路延遲)
+        function renderModalChartFromCache(klines) {
+            const closePrices = klines.slice(-25).map(k => k.close);
+            const times = klines.slice(-25).map(k => {
+                const date = new Date(k.time);
+                return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+            });
+
+            modalChartInstance.data.labels = times;
+            modalChartInstance.data.datasets[0].data = closePrices;
+            calculateTradePlan();
+        }
+
+        // 備用：無快取時的 HTTP 請求機制
         function loadModalChartData(symbol) {
             fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=15m&limit=25`)
                 .then(res => res.json())
