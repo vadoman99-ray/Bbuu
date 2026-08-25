@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>SMC 掃描器 - 手機最佳化版</title>
+    <title>SMC 掃描器 - 完整交易試算版</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
@@ -119,7 +119,6 @@
         .progress-bar-container { width: 100%; background-color: var(--bg-card); border-radius: 4px; height: 4px; overflow: hidden; display: none; }
         .progress-bar { height: 100%; background-color: var(--accent-blue); width: 0%; transition: width 0.1s ease; }
 
-        /* 🏷️ 手機頁籤式切換 */
         .tab-container { display: flex; gap: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 8px; }
         .tab-btn { 
             flex: 1;
@@ -140,7 +139,6 @@
 
         .panel { background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
 
-        /* 📱 表格行動端滑動優化 */
         .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
         table { width: 100%; min-width: 340px; border-collapse: collapse; font-size: 12px; text-align: left; }
         th { color: var(--text-secondary); padding: 8px 6px; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
@@ -153,7 +151,6 @@
 
         .log-feed { font-family: monospace; font-size: 10px; background-color: #0d1117; padding: 8px; border-radius: 6px; height: 80px; overflow-y: auto; border: 1px solid var(--border-color); color: #a3b8cc; margin-top: 12px; }
 
-        /* 📱 全螢幕手機 Modal */
         .modal-overlay {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
@@ -184,11 +181,21 @@
         .form-group { display: flex; flex-direction: column; gap: 2px; }
         .form-group label { font-size: 11px; color: var(--text-secondary); }
         .form-group input { font-size: 13px; padding: 6px; }
-        .calc-results { background-color: #0d1117; border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+        
+        /* 📊 升級版結果欄位網格 */
+        .calc-results { 
+            background-color: #0d1117; 
+            border: 1px solid var(--border-color); 
+            border-radius: 8px; 
+            padding: 10px; 
+            display: grid; 
+            grid-template-columns: repeat(2, 1fr); 
+            gap: 10px; 
+        }
         .result-item { display: flex; flex-direction: column; }
-        .result-label { font-size: 10px; color: var(--text-secondary); }
-        .result-value { font-size: 13px; font-weight: 600; margin-top: 1px; }
-        .chart-box { height: 220px; position: relative; background-color: var(--bg-card); border-radius: 8px; padding: 8px; border: 1px solid var(--border-color); }
+        .result-label { font-size: 11px; color: var(--text-secondary); }
+        .result-value { font-size: 13px; font-weight: 600; margin-top: 2px; }
+        .chart-box { height: 200px; position: relative; background-color: var(--bg-card); border-radius: 8px; padding: 8px; border: 1px solid var(--border-color); }
     </style>
 </head>
 <body>
@@ -233,7 +240,6 @@
     </div>
 
     <div class="panel">
-        <!-- 🏷️ 手機專用標籤分頁 -->
         <div class="tab-container">
             <button class="tab-btn active-long" id="tabLongBtn" onclick="switchTab('LONG')">
                 🟢 做多排行 <span id="longCount">(0)</span>
@@ -261,48 +267,65 @@
 
     <div class="log-feed" id="logFeed"></div>
 
-    <!-- 📊 行動端全螢幕 Modal 彈窗 -->
+    <!-- 📊 行動端試算 Modal 彈窗 -->
     <div class="modal-overlay" id="tradeModal" onclick="handleOverlayClick(event)">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div class="modal-header">
-                <h3 id="modalTitle" style="color: #fff; font-size: 14px;">🎯 交易試算</h3>
+                <h3 id="modalTitle" style="color: #fff; font-size: 14px;">🎯 交易計畫試算</h3>
                 <span class="modal-close" onclick="closeModal()">✕</span>
             </div>
 
             <div class="modal-grid">
                 <div class="calc-form">
                     <div class="form-group">
-                        <label>最大虧損 (USDT)</label>
+                        <label>單筆承受虧損 (USDT)</label>
                         <input type="number" id="inputLossUsdt" value="20" oninput="calculateTradePlan()">
                     </div>
                     <div style="display: flex; gap: 8px;">
                         <div class="form-group" style="flex:1;">
-                            <label>槓桿 (x)</label>
+                            <label>槓桿倍數 (x)</label>
                             <input type="number" id="inputLeverage" value="10" min="1" max="125" oninput="calculateTradePlan()">
                         </div>
                         <div class="form-group" style="flex:1;">
-                            <label>風報比 R:R</label>
+                            <label>風報比 R:R (1:X)</label>
                             <input type="number" id="inputRR" value="2" step="0.1" min="0.5" oninput="calculateTradePlan()">
                         </div>
                     </div>
                 </div>
 
+                <!-- 📊 新增買入金額、槓桿與止盈止損金額欄位 -->
                 <div class="calc-results">
                     <div class="result-item">
-                        <span class="result-label">建議進場</span>
+                        <span class="result-label">建議進場點</span>
                         <span class="result-value" id="resEntry" style="color: var(--accent-blue);">0.00</span>
                     </div>
                     <div class="result-item">
-                        <span class="result-label">建議止損 (SL)</span>
+                        <span class="result-label">使用槓桿</span>
+                        <span class="result-value" id="resLeverage" style="color: var(--accent-purple);">10x</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">下單投入本金 (保證金)</span>
+                        <span class="result-value" id="resMargin" style="color: #fff;">0.00 USDT</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">總買入金額 (名義價值)</span>
+                        <span class="result-value" id="resPositionSize" style="color: var(--accent-yellow);">0.00 USDT</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">止損價 (SL)</span>
                         <span class="result-value" id="resStopLoss" style="color: var(--accent-red);">0.00</span>
                     </div>
                     <div class="result-item">
-                        <span class="result-label">目標止盈 (TP1)</span>
+                        <span class="result-label">預計止損金額</span>
+                        <span class="result-value" id="resStopLossAmount" style="color: var(--accent-red);">-0.00 USDT</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">止盈價 (TP)</span>
                         <span class="result-value" id="resTakeProfit" style="color: var(--accent-green);">0.00</span>
                     </div>
                     <div class="result-item">
-                        <span class="result-label">預估名義價值</span>
-                        <span class="result-value" id="resPositionSize" style="color: var(--accent-yellow);">0.00</span>
+                        <span class="result-label">預計止盈金額</span>
+                        <span class="result-value" id="resTakeProfitAmount" style="color: var(--accent-green);">+0.00 USDT</span>
                     </div>
                 </div>
 
@@ -376,7 +399,7 @@
 
         async function testTelegramNotification() {
             saveTgSettings();
-            const ok = await sendTelegramMessage(`<b>🚨 SMC 機構掃描器 - 連線測試</b>\n\n🟢 手機端發送成功！`);
+            const ok = await sendTelegramMessage(`<b>🚨 SMC 機構掃描器 - 連線測試</b>\n\n🟢 測試成功！`);
             alert(ok ? "✅ 發送成功！" : "❌ 發送失敗，請檢查 Token 與 Chat ID。");
         }
 
@@ -601,6 +624,7 @@
             if (e.target.classList.contains('modal-overlay')) closeModal();
         }
 
+        /* 🧮 試算核心邏輯：計算買入金額、槓桿與止盈止損金額 */
         function calculateTradePlan() {
             if (!currentModalItem) return;
 
@@ -612,15 +636,32 @@
             const leverage = parseFloat(document.getElementById("inputLeverage").value) || 1;
             const rr = parseFloat(document.getElementById("inputRR").value) || 1;
 
+            // 計算價差百分比
             const priceRiskRatio = Math.abs(entry - sl) / entry;
 
+            // 目標止盈價格
             let tp = dir === "LONG" ? entry + (entry - sl) * rr : entry - (sl - entry) * rr;
+
+            // 總買入金額（名義價值 Position Size）= 設定最大虧損金額 / 風險比例
             let positionSize = priceRiskRatio > 0 ? lossUsdt / priceRiskRatio : 0;
 
+            // 保證金（實際本金投入）= 名義價值 / 槓桿
+            let margin = positionSize / leverage;
+
+            // 預計止盈金額 = 止損金額 * 風報比 R:R
+            let profitUsdt = lossUsdt * rr;
+
+            // 更新至 UI 顯示
             document.getElementById("resEntry").innerText = `$${entry}`;
+            document.getElementById("resLeverage").innerText = `${leverage}x`;
+            document.getElementById("resMargin").innerText = `$${margin.toFixed(2)} USDT`;
+            document.getElementById("resPositionSize").innerText = `$${positionSize.toFixed(2)} USDT`;
+            
             document.getElementById("resStopLoss").innerText = `$${sl}`;
+            document.getElementById("resStopLossAmount").innerText = `-$${lossUsdt.toFixed(2)} USDT`;
+            
             document.getElementById("resTakeProfit").innerText = `$${tp.toFixed(4)}`;
-            document.getElementById("resPositionSize").innerText = `$${positionSize.toFixed(1)} USDT`;
+            document.getElementById("resTakeProfitAmount").innerText = `+$${profitUsdt.toFixed(2)} USDT`;
 
             updateModalChartLines(entry, sl, tp);
         }
