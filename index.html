@@ -21,7 +21,15 @@
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        body { background-color: var(--bg-primary); color: var(--text-primary); padding: 16px; font-size: 14px; }
+        
+        body { 
+            background-color: var(--bg-primary); 
+            color: var(--text-primary); 
+            padding: 16px; 
+            font-size: 14px; 
+            position: relative; /* 限制 Modal 的絕對定位基準點 */
+            min-height: 100vh;
+        }
         
         header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid var(--border-color); margin-bottom: 16px; }
         .status-badge { background-color: rgba(88, 166, 255, 0.15); color: var(--accent-blue); padding: 4px 10px; border-radius: 12px; font-size: 12px; border: 1px solid rgba(88, 166, 255, 0.4); display: flex; align-items: center; gap: 6px; }
@@ -52,7 +60,6 @@
         th { color: var(--text-secondary); padding: 10px 8px; border-bottom: 1px solid var(--border-color); position: sticky; top: 0; background-color: var(--bg-secondary); }
         td { padding: 10px 8px; border-bottom: 1px solid rgba(48, 54, 61, 0.5); cursor: pointer; }
         tr:hover { background-color: var(--bg-card); }
-        tr.active-row { background-color: rgba(88, 166, 255, 0.15); }
 
         .tag { padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; display: inline-block; }
         .tag-bull { background-color: rgba(46, 160, 67, 0.2); color: var(--accent-green); }
@@ -61,20 +68,34 @@
 
         .log-feed { font-family: monospace; font-size: 11px; background-color: #0d1117; padding: 10px; border-radius: 6px; height: 120px; overflow-y: auto; border: 1px solid var(--border-color); color: #a3b8cc; margin-top: 16px; }
 
-        /* ================= 交易試算彈窗 (Modal) 樣式 ================= */
+        /* ================= 交易試算彈窗 (限定於 App 範圍內) ================= */
         .modal-overlay {
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: rgba(0, 0, 0, 0.75);
-            display: none; justify-content: center; align-items: center;
-            z-index: 1000; backdrop-filter: blur(4px);
+            position: absolute; /* 限制在 Body / App 主容器範圍 */
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none; 
+            justify-content: center; 
+            align-items: flex-start;
+            padding-top: 40px;
+            z-index: 1000; 
+            backdrop-filter: blur(4px);
         }
         .modal-content {
             background-color: var(--bg-secondary);
             border: 1px solid var(--border-color);
-            border-radius: 12px; width: 90%; max-width: 950px;
-            max-height: 90vh; overflow-y: auto; padding: 20px;
-            display: flex; flex-direction: column; gap: 16px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            border-radius: 12px; 
+            width: 95%; 
+            max-width: 950px;
+            max-height: calc(100vh - 80px); /* 避免超出視區 */
+            overflow-y: auto; 
+            padding: 20px;
+            display: flex; 
+            flex-direction: column; 
+            gap: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6);
         }
         .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; }
         .modal-close { font-size: 20px; cursor: pointer; color: var(--text-secondary); }
@@ -106,7 +127,6 @@
         </div>
     </header>
 
-    <!-- Telegram Bot 警報推播設定區 -->
     <div class="tg-panel">
         <label>🤖 Telegram 即時推播設定：</label>
         <input type="password" id="tgBotToken" placeholder="Bot Token (如: 123456:ABC...)" style="width: 240px;" onchange="saveTgSettings()">
@@ -134,7 +154,6 @@
     </div>
 
     <div class="main-grid">
-        <!-- 即時數據掃描清單 -->
         <div class="panel">
             <div class="panel-title">
                 <span>🔥 即時觸發訊號標的 (USDT-M 15m) — 💡 點擊列即可開單試算</span>
@@ -161,7 +180,7 @@
 
     <div class="log-feed" id="logFeed"></div>
 
-    <!-- 📊 交易試算與策略圖表 Modal 彈窗 -->
+    <!-- 📊 交易試算與策略圖表 Modal 彈窗 (App 範圍內) -->
     <div class="modal-overlay" id="tradeModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -170,7 +189,6 @@
             </div>
 
             <div class="modal-grid">
-                <!-- 左邊：輸入參數與計算結果 -->
                 <div style="display: flex; flex-direction: column; gap: 12px;">
                     <div class="calc-form">
                         <div class="form-group">
@@ -215,7 +233,6 @@
                     </div>
                 </div>
 
-                <!-- 右邊：K線與進出場止損止盈圖 -->
                 <div class="chart-box">
                     <canvas id="modalChart"></canvas>
                 </div>
@@ -464,12 +481,17 @@
                 : `共 ${count} 個訊號`;
         }
 
-        /* ================= 📊 Modal 彈窗與風控計算邏輯 ================= */
+        /* ================= 📊 開啟 App 內限制彈窗與滾動聚焦 ================= */
         function openTradeModal(item) {
             currentModalItem = item;
             document.getElementById("modalTitle").innerHTML = `🎯 交易試算 — ${item.symbol} <span class="tag ${item.direction === 'LONG' ? 'tag-bull' : 'tag-bear'}">${item.direction}</span>`;
-            document.getElementById("tradeModal").style.display = "flex";
             
+            const modal = document.getElementById("tradeModal");
+            modal.style.display = "flex";
+            
+            // 開啟時平滑滾動置頂至彈窗區域
+            modal.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
             calculateTradePlan();
             loadModalChartData(item.symbol);
         }
@@ -489,10 +511,8 @@
             const leverage = parseFloat(document.getElementById("inputLeverage").value) || 1;
             const rr = parseFloat(document.getElementById("inputRR").value) || 1;
 
-            // 計算止損百分比
             const priceRiskRatio = Math.abs(entry - sl) / entry;
 
-            // 計算止盈價格 (TP)
             let tp = 0;
             let tp2 = 0;
             if (dir === "LONG") {
@@ -503,7 +523,6 @@
                 tp2 = entry - (sl - entry) * (rr * 1.5);
             }
 
-            // 計算名義價值與保證金
             let positionSize = 0;
             let margin = 0;
             if (priceRiskRatio > 0) {
@@ -511,7 +530,6 @@
                 margin = positionSize / leverage;
             }
 
-            // 更新 UI
             document.getElementById("resEntry").innerText = `$${entry}`;
             document.getElementById("resStopLoss").innerText = `$${sl}`;
             document.getElementById("resTakeProfit").innerText = `$${tp.toFixed(4)}`;
@@ -519,7 +537,6 @@
             document.getElementById("resPositionSize").innerText = `$${positionSize.toFixed(2)} USDT`;
             document.getElementById("resMargin").innerText = `$${margin.toFixed(2)} USDT`;
 
-            // 更新圖表線條
             updateModalChartLines(entry, sl, tp);
         }
 
@@ -535,7 +552,7 @@
 
                     modalChartInstance.data.labels = times;
                     modalChartInstance.data.datasets[0].data = closePrices;
-                    calculateTradePlan(); // 自動重繪基準線
+                    calculateTradePlan();
                 });
         }
 
