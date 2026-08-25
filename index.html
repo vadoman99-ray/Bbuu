@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>機構反向收割 - USDT 永續合約 SMC 全市場掃描器 (行動端 Safe Area 優化版)</title>
+    <title>機構反向收割 - SMC 掃描器 (成交額 1 億+ / 做多做空分頁版)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
@@ -20,12 +20,7 @@
             --accent-purple: #bc8cff;
         }
 
-        * { 
-            box-sizing: border-box; 
-            margin: 0; 
-            padding: 0; 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         
         body { 
             background-color: var(--bg-primary); 
@@ -55,10 +50,14 @@
         .progress-bar-container { width: 100%; background-color: var(--bg-card); border-radius: 4px; height: 6px; overflow: hidden; margin-top: 4px; display: none; }
         .progress-bar { height: 100%; background-color: var(--accent-blue); width: 0%; transition: width 0.1s ease; }
 
-        .main-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+        /* 🏷️ 分頁標籤樣式 */
+        .tab-container { display: flex; gap: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px; }
+        .tab-btn { background-color: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); padding: 8px 16px; border-radius: 6px; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+        .tab-btn.active-long { background-color: rgba(46, 160, 67, 0.2); color: var(--accent-green); border-color: var(--accent-green); }
+        .tab-btn.active-short { background-color: rgba(218, 54, 51, 0.2); color: var(--accent-red); border-color: var(--accent-red); }
 
+        .main-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
         .panel { background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-        .panel-title { font-size: 14px; font-weight: 600; color: #fff; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
 
         .table-container { overflow-y: auto; max-height: 650px; }
         table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
@@ -73,68 +72,46 @@
 
         .log-feed { font-family: monospace; font-size: 11px; background-color: #0d1117; padding: 10px; border-radius: 6px; height: 120px; overflow-y: auto; border: 1px solid var(--border-color); color: #a3b8cc; margin-top: 16px; }
 
-        /* ================= 📱 行動端 & App Safe Area 優化彈窗 ================= */
+        /* 📱 App 彈窗優化 */
         .modal-overlay {
-            position: fixed; /* 固定在 viewport 範圍，防止隨頁面滾動 */
-            top: 0; 
-            left: 0; 
-            right: 0;
-            bottom: 0;
-            width: 100vw; 
-            height: 100vh;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            width: 100vw; height: 100vh;
             background: rgba(0, 0, 0, 0.85);
-            display: none; 
-            justify-content: center; 
-            align-items: center; /* 垂直置中，配合行動裝置習慣 */
+            display: none; justify-content: center; align-items: center;
             padding: 12px;
-            /* 適應 iOS/Android 底部安全區 (如 iPhone Home Bar) */
             padding-bottom: calc(12px + env(safe-area-inset-bottom));
             padding-top: calc(12px + env(safe-area-inset-top));
-            z-index: 9999; 
-            backdrop-filter: blur(5px);
+            z-index: 9999; backdrop-filter: blur(5px);
         }
-
         .modal-content {
             background-color: var(--bg-secondary);
             border: 1px solid var(--border-color);
-            border-radius: 12px; 
-            width: 100%; 
-            max-width: 950px;
-            /* 自動調整最大高度，避免覆蓋 status bar / safe area */
+            border-radius: 12px; width: 100%; max-width: 950px;
             max-height: calc(100vh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-            overflow-y: auto; 
-            -webkit-overflow-scrolling: touch; /* 提升 iOS 滾動滑順度 */
-            padding: 16px;
-            display: flex; 
-            flex-direction: column; 
-            gap: 16px;
+            overflow-y: auto; -webkit-overflow-scrolling: touch;
+            padding: 16px; display: flex; flex-direction: column; gap: 16px;
             box-shadow: 0 8px 32px rgba(0,0,0,0.8);
         }
-
         .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; }
         .modal-close { font-size: 22px; cursor: pointer; color: var(--text-secondary); padding: 4px 8px; }
-        .modal-close:hover { color: #fff; }
-
         .modal-grid { display: grid; grid-template-columns: 320px 1fr; gap: 16px; }
         @media (max-width: 768px) { .modal-grid { grid-template-columns: 1fr; } }
-
         .calc-form { background-color: var(--bg-card); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 12px; }
         .form-group { display: flex; flex-direction: column; gap: 4px; }
         .form-group label { font-size: 12px; color: var(--text-secondary); }
         .form-group input { width: 100%; font-size: 14px; font-weight: 600; }
-
         .calc-results { background-color: #0d1117; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
         .result-item { display: flex; flex-direction: column; }
         .result-label { font-size: 11px; color: var(--text-secondary); }
         .result-value { font-size: 14px; font-weight: 600; margin-top: 2px; }
-
         .chart-box { height: 320px; position: relative; background-color: var(--bg-card); border-radius: 8px; padding: 10px; border: 1px solid var(--border-color); }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>🎯 SMC 全市場掃描器 (純 REST API 輪詢 / TG 推播版)</h1>
+        <h1>🎯 SMC 機構掃描器 (成交額 1 億+ 高流動性版)</h1>
         <div class="status-badge">
             <span class="status-dot"></span>
             <span>REST API 模式</span>
@@ -158,7 +135,7 @@
             </select>
         </div>
 
-        <button id="scanBtn" onclick="scanAllMarketSMC()">⚡ 全市場掃描</button>
+        <button id="scanBtn" onclick="scanAllMarketSMC()">⚡ 掃描 1 億+ 成交額標的</button>
         <span id="lastUpdate" style="margin-left: auto; color: var(--text-secondary); font-size: 12px;">最後更新: --:--:--</span>
         
         <div class="progress-bar-container" id="progressContainer">
@@ -168,9 +145,14 @@
 
     <div class="main-grid">
         <div class="panel">
-            <div class="panel-title">
-                <span>🔥 即時觸發訊號標的 (USDT-M 15m)</span>
-                <span id="signalCount" style="color: var(--accent-yellow);">未開始掃描</span>
+            <!-- 🏷️ 做多與做空標籤分頁 -->
+            <div class="tab-container">
+                <button class="tab-btn active-long" id="tabLongBtn" onclick="switchTab('LONG')">
+                    🟢 做多標的 (按 24h 漲幅排行) <span id="longCount">(0)</span>
+                </button>
+                <button class="tab-btn" id="tabShortBtn" onclick="switchTab('SHORT')">
+                    🔴 做空標的 (按 24h 跌幅排行) <span id="shortCount">(0)</span>
+                </button>
             </div>
 
             <div class="table-container">
@@ -178,9 +160,10 @@
                     <thead>
                         <tr>
                             <th>幣種</th>
-                            <th>最新價</th>
+                            <th>最新價 (USDT)</th>
+                            <th>24h 漲跌幅</th>
+                            <th>24h 成交額</th>
                             <th>戰法</th>
-                            <th>方向</th>
                             <th>預估止損</th>
                             <th>操作</th>
                         </tr>
@@ -193,7 +176,7 @@
 
     <div class="log-feed" id="logFeed"></div>
 
-    <!-- 📊 交易試算與策略圖表 Modal 彈窗 (App Safe Area 適應版) -->
+    <!-- 📊 交易試算 Modal 彈窗 -->
     <div class="modal-overlay" id="tradeModal" onclick="handleOverlayClick(event)">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div class="modal-header">
@@ -255,11 +238,14 @@
 
     <script>
         let marketDataMap = {};
+        let currentTab = "LONG"; // 預設頁籤
         let currentModalItem = null;
         let modalChartInstance = null;
         let isScanning = false;
         let pollingTimer = null;
         let notifiedSignals = new Set();
+
+        const MIN_VOLUME_USDT = 100000000; // 💰 成交額門檻：1 億 USDT
 
         window.onload = function() {
             initModalChart();
@@ -268,16 +254,29 @@
             startPollingLatestPrices();
         };
 
+        function switchTab(tabDirection) {
+            currentTab = tabDirection;
+            const longBtn = document.getElementById("tabLongBtn");
+            const shortBtn = document.getElementById("tabShortBtn");
+
+            if (tabDirection === "LONG") {
+                longBtn.className = "tab-btn active-long";
+                shortBtn.className = "tab-btn";
+            } else {
+                longBtn.className = "tab-btn";
+                shortBtn.className = "tab-btn active-short";
+            }
+            renderTable();
+        }
+
         function loadTgSettings() {
             document.getElementById("tgBotToken").value = localStorage.getItem("SMC_TG_BOT_TOKEN") || "";
             document.getElementById("tgChatId").value = localStorage.getItem("SMC_TG_CHAT_ID") || "";
         }
 
         function saveTgSettings() {
-            const token = document.getElementById("tgBotToken").value.trim();
-            const chatId = document.getElementById("tgChatId").value.trim();
-            localStorage.setItem("SMC_TG_BOT_TOKEN", token);
-            localStorage.setItem("SMC_TG_CHAT_ID", chatId);
+            localStorage.setItem("SMC_TG_BOT_TOKEN", document.getElementById("tgBotToken").value.trim());
+            localStorage.setItem("SMC_TG_CHAT_ID", document.getElementById("tgChatId").value.trim());
         }
 
         async function sendTelegramMessage(text) {
@@ -300,18 +299,23 @@
 
         async function testTelegramNotification() {
             saveTgSettings();
-            const msg = `<b>🚨 SMC 機構掃描器 - Telegram 連線測試</b>\n\n🟢 Webhook 設定成功！`;
-            const ok = await sendTelegramMessage(msg);
-            alert(ok ? "✅ 測試訊息發送成功！" : "❌ 發送失敗，請確認 Token 與 Chat ID。");
+            const ok = await sendTelegramMessage(`<b>🚨 SMC 機構掃描器 - 連線測試</b>\n\n🟢 訊息發送成功！`);
+            alert(ok ? "✅ 測試發送成功！" : "❌ 發送失敗，請檢查 Token 與 Chat ID。");
         }
 
-        async function fetchAllUsdtSymbols() {
+        /* 🔍 獲取成交額 >= 1 億 USDT 的標的 */
+        async function fetchHighVolumeSymbols() {
             try {
-                const res = await fetch("https://fapi.binance.com/fapi/v1/exchangeInfo");
+                const res = await fetch("https://fapi.binance.com/fapi/v1/ticker/24hr");
                 const data = await res.json();
-                return data.symbols
-                    .filter(s => s.quoteAsset === "USDT" && s.contractType === "PERPETUAL" && s.status === "TRADING")
-                    .map(s => s.symbol);
+                
+                return data
+                    .filter(item => item.symbol.endsWith("USDT") && parseFloat(item.quoteVolume) >= MIN_VOLUME_USDT)
+                    .map(item => ({
+                        symbol: item.symbol,
+                        priceChangePercent: parseFloat(item.priceChangePercent),
+                        quoteVolume: parseFloat(item.quoteVolume)
+                    }));
             } catch (err) {
                 return [];
             }
@@ -331,15 +335,17 @@
             marketDataMap = {}; 
             renderTable();
 
-            logEvent("🌐 開始掃描全市場 USDT 永續合約...");
-            const symbols = await fetchAllUsdtSymbols();
+            logEvent("🌐 篩選 24h 成交額 ≥ 1 億 USDT 之標的...");
+            const targetSymbols = await fetchHighVolumeSymbols();
+            logEvent(`⚡ 符合 1 億 USDT 成交額標的共 ${targetSymbols.length} 個，開始 SMC 戰法掃描...`);
 
             const BATCH_SIZE = 12;
             let completed = 0;
 
-            for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
-                const chunk = symbols.slice(i, i + BATCH_SIZE);
-                await Promise.all(chunk.map(async (symbol) => {
+            for (let i = 0; i < targetSymbols.length; i += BATCH_SIZE) {
+                const chunk = targetSymbols.slice(i, i + BATCH_SIZE);
+                await Promise.all(chunk.map(async (target) => {
+                    const symbol = target.symbol;
                     try {
                         const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=15m&limit=35`);
                         if (!res.ok) return;
@@ -356,6 +362,8 @@
                             marketDataMap[symbol] = {
                                 symbol: symbol,
                                 price: latestPrice,
+                                priceChangePercent: target.priceChangePercent,
+                                volumeUsdt: target.quoteVolume,
                                 strategyCode: smcResult.code,
                                 strategyName: smcResult.name,
                                 timeframe: "15m",
@@ -371,7 +379,7 @@
                     }
                 }));
 
-                progressBar.style.width = `${Math.floor((completed / symbols.length) * 100)}%`;
+                progressBar.style.width = `${Math.floor((completed / targetSymbols.length) * 100)}%`;
                 renderTable();
                 await new Promise(r => setTimeout(r, 60));
             }
@@ -379,7 +387,7 @@
             isScanning = false;
             scanBtn.disabled = false;
             progressContainer.style.display = "none";
-            logEvent(`🎉 掃描完成！共發現 ${Object.keys(marketDataMap).length} 個 SMC 機構訊號標的。`);
+            logEvent(`🎉 掃描完成！發現 ${Object.keys(marketDataMap).length} 個高流動性 SMC 訊號標的。`);
             renderTable();
             updateHeaderTime();
         }
@@ -389,16 +397,15 @@
             pollingTimer = setInterval(async () => {
                 if (Object.keys(marketDataMap).length === 0 || isScanning) return;
                 try {
-                    const res = await fetch("https://fapi.binance.com/fapi/v1/ticker/price");
+                    const res = await fetch("https://fapi.binance.com/fapi/v1/ticker/24hr");
                     if (!res.ok) return;
-                    const allPrices = await res.json();
-                    const priceLookup = {};
-                    allPrices.forEach(p => priceLookup[p.symbol] = parseFloat(p.price));
-
-                    Object.keys(marketDataMap).forEach(symbol => {
-                        if (priceLookup[symbol]) {
-                            marketDataMap[symbol].price = priceLookup[symbol];
-                            marketDataMap[symbol].entry = priceLookup[symbol];
+                    const allTickers = await res.json();
+                    
+                    allTickers.forEach(t => {
+                        if (marketDataMap[t.symbol]) {
+                            marketDataMap[t.symbol].price = parseFloat(t.lastPrice);
+                            marketDataMap[t.symbol].priceChangePercent = parseFloat(t.priceChangePercent);
+                            marketDataMap[t.symbol].volumeUsdt = parseFloat(t.quoteVolume);
                         }
                     });
 
@@ -417,13 +424,13 @@
             const stopLossPct = (Math.abs(price - smc.stopLoss) / price * 100).toFixed(2);
 
             const tgMessage = 
-`🎯 <b>【SMC 機構戰法觸發通知】</b>
+`🎯 <b>【SMC 戰法觸發 (成交額 1 億+)】</b>
 
 📌 <b>標的幣種</b>：<code>${symbol}</code>
 ⚡ <b>觸發戰法</b>：<b>${smc.name}</b>
 📈 <b>操作方向</b>：${dirEmoji}
 💵 <b>當前價格</b>：<code>$${price} USDT</code>
-🛡️ <b>動態止損</b>：<code>$${smc.stopLoss} USDT</code> (預估風險: ${stopLossPct}%)
+🛡️ <b>動態止損</b>：<code>$${smc.stopLoss} USDT</code> (${stopLossPct}%)
 ⏰ <b>觸發時間</b>：${new Date().toTimeString().split(' ')[0]}`;
 
             sendTelegramMessage(tgMessage);
@@ -460,50 +467,61 @@
             return null;
         }
 
+        /* 📊 渲染表格 (包含 1億+ 成交額顯示與做多/做空漲跌幅排序) */
         function renderTable() {
             const filter = document.getElementById("strategyFilter").value;
             const tbody = document.getElementById("scannerTableBody");
             tbody.innerHTML = "";
 
-            let count = 0;
-            const items = Object.values(marketDataMap);
+            const allItems = Object.values(marketDataMap);
 
-            items.forEach(item => {
+            // 分離多空標的
+            const longItems = allItems.filter(i => i.direction === "LONG");
+            const shortItems = allItems.filter(i => i.direction === "SHORT");
+
+            // 更新計數
+            document.getElementById("longCount").innerText = `(${longItems.length})`;
+            document.getElementById("shortCount").innerText = `(${shortItems.length})`;
+
+            // 做多：按漲幅從高到低降序排序 | 做空：按跌幅從低到高升序排序
+            let displayItems = currentTab === "LONG" ? longItems : shortItems;
+            displayItems.sort((a, b) => {
+                return currentTab === "LONG" 
+                    ? b.priceChangePercent - a.priceChangePercent 
+                    : a.priceChangePercent - b.priceChangePercent;
+            });
+
+            displayItems.forEach(item => {
                 if (filter !== "ALL" && item.strategyCode !== filter) return;
-                count++;
 
                 const tr = document.createElement("tr");
                 tr.onclick = () => openTradeModal(item);
 
-                const dirClass = item.direction === "LONG" ? "tag-bull" : "tag-bear";
-                const dirText = item.direction === "LONG" ? "做多 🟢" : "做空 🔴";
+                const changeColor = item.priceChangePercent >= 0 ? "var(--accent-green)" : "var(--accent-red)";
+                const changeSign = item.priceChangePercent >= 0 ? "+" : "";
+                const volIn100M = (item.volumeUsdt / 100000000).toFixed(2); // 換算成 億 USDT
 
                 tr.innerHTML = `
                     <td style="font-weight:600; color:#fff;">${item.symbol}</td>
                     <td>$${item.price} USDT</td>
+                    <td style="color:${changeColor}; font-weight:600;">${changeSign}${item.priceChangePercent.toFixed(2)}%</td>
+                    <td style="color:var(--accent-yellow);">${volIn100M} 億</td>
                     <td><span class="tag tag-strategy">${item.strategyCode}</span></td>
-                    <td><span class="tag ${dirClass}">${dirText}</span></td>
                     <td style="color: var(--accent-red);">$${item.stopLoss}</td>
                     <td><button style="padding: 3px 8px; font-size: 11px;">📊 試算</button></td>
                 `;
                 tbody.appendChild(tr);
             });
-
-            document.getElementById("signalCount").innerText = isScanning 
-                ? `掃描中... 已發現 ${count} 個` 
-                : `共 ${count} 個訊號`;
         }
 
-        /* ================= 📱 鎖定背景與彈窗邏輯 ================= */
+        /* 📱 彈窗邏輯 */
         function openTradeModal(item) {
             currentModalItem = item;
             document.getElementById("modalTitle").innerHTML = `🎯 交易試算 — ${item.symbol} <span class="tag ${item.direction === 'LONG' ? 'tag-bull' : 'tag-bear'}">${item.direction}</span>`;
             
             const modal = document.getElementById("tradeModal");
             modal.style.display = "flex";
-            
-            // 🔒 鎖定主頁面背景滾動，避免手機上雙重滾動問題
-            document.body.style.overflow = "hidden";
+            document.body.style.overflow = "hidden"; // 鎖定背景
 
             calculateTradePlan();
             loadModalChartData(item.symbol);
@@ -511,14 +529,11 @@
 
         function closeModal() {
             document.getElementById("tradeModal").style.display = "none";
-            // 🔓 解鎖主頁面滾動
-            document.body.style.overflow = "auto";
+            document.body.style.overflow = "auto"; // 恢復背景滾動
         }
 
         function handleOverlayClick(e) {
-            if (e.target.classList.contains('modal-overlay')) {
-                closeModal();
-            }
+            if (e.target.classList.contains('modal-overlay')) closeModal();
         }
 
         function calculateTradePlan() {
@@ -534,22 +549,11 @@
 
             const priceRiskRatio = Math.abs(entry - sl) / entry;
 
-            let tp = 0;
-            let tp2 = 0;
-            if (dir === "LONG") {
-                tp = entry + (entry - sl) * rr;
-                tp2 = entry + (entry - sl) * (rr * 1.5);
-            } else {
-                tp = entry - (sl - entry) * rr;
-                tp2 = entry - (sl - entry) * (rr * 1.5);
-            }
+            let tp = dir === "LONG" ? entry + (entry - sl) * rr : entry - (sl - entry) * rr;
+            let tp2 = dir === "LONG" ? entry + (entry - sl) * (rr * 1.5) : entry - (sl - entry) * (rr * 1.5);
 
-            let positionSize = 0;
-            let margin = 0;
-            if (priceRiskRatio > 0) {
-                positionSize = lossUsdt / priceRiskRatio;
-                margin = positionSize / leverage;
-            }
+            let positionSize = priceRiskRatio > 0 ? lossUsdt / priceRiskRatio : 0;
+            let margin = positionSize / leverage;
 
             document.getElementById("resEntry").innerText = `$${entry}`;
             document.getElementById("resStopLoss").innerText = `$${sl}`;
