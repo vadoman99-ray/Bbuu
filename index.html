@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SMC 15m/1m 雙時間框架假突破掃描器</title>
+  <title>SMC 15m/1m 雙框架假突破極速掃描器</title>
   <style>
     :root {
       --bg-color: #121418;
@@ -84,13 +84,13 @@
 
 <div class="container">
   <header>
-    <h1>🎯 15m/1m 雙框架假突破掃描器</h1>
+    <h1>⚡ 15m/1m 雙框架假突破【極速版】掃描器</h1>
     <div class="controls">
-      <button id="scanBtn" onclick="startScan()">🚀 開始掃描雙框架訊號</button>
+      <button id="scanBtn" onclick="startScan()">⚡ 併發極速掃描</button>
     </div>
   </header>
 
-  <div class="status" id="statusText">點擊按鈕，掃描 15m 鎖定與 1m 精準進場訊號...</div>
+  <div class="status" id="statusText">點擊按鈕，啟動多線程平行掃描...</div>
 
   <div class="table-container">
     <table>
@@ -105,37 +105,39 @@
         </tr>
       </thead>
       <tbody id="resultBody">
-        <tr><td colspan="6" style="text-align: center; color: #848e9c;">暫無數據，請點擊上方按鈕開始分析</td></tr>
+        <tr><td colspan="6" style="text-align: center; color: #848e9c;">點擊上方按鈕開始極速分析</td></tr>
       </tbody>
     </table>
   </div>
 </div>
 
 <script>
-  // 代理池，防範 CORS 與 429 限流
+  // 代理列表
   const PROXIES = [
     url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
     url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
   ];
-  let proxyIndex = 0;
-  const sleep = ms => new Promise(res => setTimeout(res, ms));
 
-  async function fetchAPI(url) {
-    for (let i = 0; i < PROXIES.length; i++) {
+  async function fetchWithTimeout(url, timeout = 3000) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    
+    for (let proxy of PROXIES) {
       try {
-        const res = await fetch(PROXIES[proxyIndex](url));
+        const res = await fetch(proxy(url), { signal: controller.signal });
+        clearTimeout(id);
         if (res.ok) return await res.json();
       } catch (e) {
-        proxyIndex = (proxyIndex + 1) % PROXIES.length;
-        await sleep(100);
+        // 切換下一個代理
       }
     }
-    throw new Error('API 請求失敗');
+    clearTimeout(id);
+    throw new Error('Timeout or Failed');
   }
 
-  // 獲取前 15 名永續合約熱門幣種
+  // 獲取前 15 名熱門幣種
   async function getTopSymbols() {
-    const data = await fetchAPI('https://fapi.binance.com/fapi/1/ticker/24hr');
+    const data = await fetchWithTimeout('https://fapi.binance.com/fapi/1/ticker/24hr');
     return data
       .filter(item => item.symbol.endsWith('USDT'))
       .sort((a, b) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume))
@@ -143,35 +145,58 @@
       .map(item => item.symbol);
   }
 
-  // 獲取特定 timeframe 的 K 線數據
-  async function getKlines(symbol, interval, limit = 20) {
-    const data = await fetchAPI(`https://fapi.binance.com/fapi/1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
-    return data.map(k => ({
-      high: parseFloat(k[2]),
-      low: parseFloat(k[3]),
-      close: parseFloat(k[4]),
-      open: parseFloat(k[1])
-    }));
-  }
-
-  // 檢測 Sweep（假突破掠奪）：突破前高/低點但收盤收回
+  // 檢測 Sweep（假突破掠奪）
   function checkSweep(klines) {
     const len = klines.length;
     if (len < 5) return null;
 
-    const current = klines[len - 1]; // 最新收盤/當前 K 線
+    const current = klines[len - 1]; 
     const prevHigh = Math.max(...klines.slice(len - 12, len - 1).map(k => k.high));
     const prevLow = Math.min(...klines.slice(len - 12, len - 1).map(k => k.low));
 
-    // 向上刺穿但收回（空單訊號）
+    // 向上刺穿但收回（做空）
     if (current.high > prevHigh && current.close < prevHigh) {
       return { type: 'Bearish', sweepPoint: current.high, entryPrice: current.close };
     }
-    // 向下刺穿但收回（多單訊號）
+    // 向下刺穿但收回（做多）
     if (current.low < prevLow && current.close > prevLow) {
       return { type: 'Bullish', sweepPoint: current.low, entryPrice: current.close };
     }
 
+    return null;
+  }
+
+  // 單個幣種平行分析
+  async function analyzeSymbol(symbol) {
+    try {
+      // 併發同時請求 15m 與 1m K線，節省網路來回時間
+      const [res15m, res1m] = await Promise.all([
+        fetchWithTimeout(`https://fapi.binance.com/fapi/1/klines?symbol=${symbol}&interval=15m&limit=15`),
+        fetchWithTimeout(`https://fapi.binance.com/fapi/1/klines?symbol=${symbol}&interval=1m&limit=15`)
+      ]);
+
+      const parseKlines = data => data.map(k => ({
+        high: parseFloat(k[2]),
+        low: parseFloat(k[3]),
+        close: parseFloat(k[4])
+      }));
+
+      const klines15m = parseKlines(res15m);
+      const signal15m = checkSweep(klines15m);
+
+      if (signal15m) {
+        const klines1m = parseKlines(res1m);
+        const signal1m = checkSweep(klines1m);
+
+        return {
+          symbol,
+          signal15m,
+          signal1m
+        };
+      }
+    } catch (e) {
+      return null;
+    }
     return null;
   }
 
@@ -180,60 +205,45 @@
     const tbody = document.getElementById('resultBody');
     const scanBtn = document.getElementById('scanBtn');
 
+    const startTime = Date.now();
     scanBtn.disabled = true;
-    statusText.innerText = '正在初始化數據連線...';
+    statusText.innerText = '⚡ 正在進行併發高速掃描...';
     tbody.innerHTML = '';
 
     try {
       const symbols = await getTopSymbols();
-      let foundCount = 0;
+      
+      // 使用 Promise.all 同時發起所有幣種的掃描
+      const results = await Promise.all(symbols.map(sym => analyzeSymbol(sym)));
+      const validResults = results.filter(r => r !== null);
 
-      for (let i = 0; i < symbols.length; i++) {
-        const symbol = symbols[i];
-        statusText.innerText = `正在分析雙時框型態 (${i + 1}/${symbols.length})：${symbol}...`;
+      if (validResults.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #848e9c;">當前熱門標的未發現符合 15m/1m 雙框架假突破訊號</td></tr>';
+      } else {
+        validResults.forEach(res => {
+          const isBull = res.signal15m.type === 'Bullish';
+          const status1mText = res.signal1m ? '🔥 1m 同步出現掃蕩點（即刻進場）' : '⏳ 1m 等待二次掃蕩訊號';
 
-        try {
-          // 步驟 1：檢測 15 分鐘圖（大週期 Sweep）
-          const klines15m = await getKlines(symbol, '15m', 15);
-          const signal15m = checkSweep(klines15m);
-
-          if (signal15m) {
-            // 步驟 2：15m 條件觸發，切換檢測 1 分鐘圖（小週期 1m Sweep 精準確認）
-            await sleep(150); // 防限流短暫停頓
-            const klines1m = await getKlines(symbol, '1m', 15);
-            const signal1m = checkSweep(klines1m);
-
-            foundCount++;
-            const isBull = signal15m.type === 'Bullish';
-            const status1mText = signal1m ? '🔥 1m 同步出現掃蕩點（可即刻進場）' : '⏳ 1m 等待二次掃蕩訊號';
-            
-            const row = `
-              <tr>
-                <td><strong>${symbol}</strong></td>
-                <td><span class="badge ${isBull ? 'badge-bull' : 'badge-bear'}">${isBull ? '看多 (Long)' : '看空 (Short)'}</span></td>
-                <td>15m 區間 Sweep 已形成</td>
-                <td>${status1mText}</td>
-                <td class="price-tag">${signal1m ? signal1m.entryPrice : signal15m.entryPrice}</td>
-                <td class="price-tag" style="color: var(--accent-red);">${signal15m.sweepPoint}</td>
-              </tr>
-            `;
-            tbody.innerHTML += row;
-          }
-        } catch (e) {
-          console.warn(`${symbol} 獲取失敗`, e);
-        }
-
-        await sleep(150); // 每批次停頓保護 API
+          const row = `
+            <tr>
+              <td><strong>${res.symbol}</strong></td>
+              <td><span class="badge ${isBull ? 'badge-bull' : 'badge-bear'}">${isBull ? '看多 (Long)' : '看空 (Short)'}</span></td>
+              <td>15m 區間 Sweep 已形成</td>
+              <td>${status1mText}</td>
+              <td class="price-tag">${res.signal1m ? res.signal1m.entryPrice : res.signal15m.entryPrice}</td>
+              <td class="price-tag" style="color: var(--accent-red);">${res.signal15m.sweepPoint}</td>
+            </tr>
+          `;
+          tbody.innerHTML += row;
+        });
       }
 
-      if (foundCount === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #848e9c;">當前前 15 大幣種未發現符合 15m/1m 雙框架掃蕩的標的</td></tr>';
-      }
-      statusText.innerText = `掃描完成！發現 ${foundCount} 個符合 15m 假突破的潛在標的。`;
+      const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+      statusText.innerText = `⚡ 掃描完成！僅耗時 ${duration} 秒，發現 ${validResults.length} 個潛在標的。`;
 
     } catch (err) {
       console.error(err);
-      statusText.innerText = '❌ 掃描失敗，請稍後重試。';
+      statusText.innerText = '❌ 掃描失敗，請檢查網路。';
     } finally {
       scanBtn.disabled = false;
     }
