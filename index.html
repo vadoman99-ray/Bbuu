@@ -3,587 +3,349 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>機構反向收割 - USDT 永續合約 SMC 全市場掃描器 (純 REST API / TG 推播版)</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>SMC 交易量 1 億以上極速掃描器</title>
     <style>
         :root {
-            --bg-primary: #0d1117;
-            --bg-secondary: #161b22;
-            --bg-card: #21262d;
-            --border-color: #30363d;
-            --text-primary: #c9d1d9;
-            --text-secondary: #8b949e;
-            --accent-green: #2ea043;
-            --accent-red: #da3633;
-            --accent-blue: #58a6ff;
-            --accent-yellow: #d29922;
-            --accent-purple: #bc8cff;
+            --bg: #0b0e14; --card: #151921; --border: #262c36;
+            --text: #e1e7ed; --muted: #788596;
+            --green: #00c076; --red: #ff5353; --blue: #388bfd; --purple: #a371f7;
+            /* 採用等寬與無襯線混合系統字型，確保數據對齊 */
+            --font-mono: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+            --font-main: system-ui, -apple-system, sans-serif;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        body { background-color: var(--bg-primary); color: var(--text-primary); padding: 16px; font-size: 14px; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: var(--bg); color: var(--text); font-family: var(--font-main); font-size: 13px; padding: 12px; }
+
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+        h1 { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: 0.5px; }
+
+        /* 統一控制列 */
+        .panel { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 10px; margin-bottom: 12px; }
+        .flex { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
         
-        header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid var(--border-color); margin-bottom: 16px; }
-        .status-badge { background-color: rgba(88, 166, 255, 0.15); color: var(--accent-blue); padding: 4px 10px; border-radius: 12px; font-size: 12px; border: 1px solid rgba(88, 166, 255, 0.4); display: flex; align-items: center; gap: 6px; }
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; background-color: var(--accent-blue); display: inline-block; }
+        input, select, button { background: var(--bg); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 4px; outline: none; font-family: var(--font-main); }
+        button { background: #238636; color: #fff; border: none; cursor: pointer; font-weight: 600; }
+        button:hover { background: var(--green); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        .tg-panel { display: flex; flex-wrap: wrap; gap: 10px; background-color: rgba(88, 166, 255, 0.08); padding: 10px 16px; border-radius: 8px; border: 1px solid rgba(88, 166, 255, 0.3); margin-bottom: 16px; align-items: center; }
-        .tg-panel label { font-size: 12px; color: var(--accent-blue); font-weight: 600; }
-
-        .controls { display: flex; flex-wrap: wrap; gap: 12px; background-color: var(--bg-secondary); padding: 12px 16px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 16px; align-items: center; }
-        .control-group { display: flex; align-items: center; gap: 8px; }
-        select, input, button { background-color: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color); padding: 6px 12px; border-radius: 6px; font-size: 13px; outline: none; }
-        button { cursor: pointer; background-color: #238636; color: #fff; font-weight: 500; border: none; }
-        button:hover { background-color: #2ea043; }
-        button:disabled { background-color: #30363d; color: var(--text-secondary); cursor: not-allowed; }
-        .btn-tg { background-color: #1f6feb; }
-        .btn-tg:hover { background-color: #388bfd; }
-
-        .progress-bar-container { width: 100%; background-color: var(--bg-card); border-radius: 4px; height: 6px; overflow: hidden; margin-top: 4px; display: none; }
-        .progress-bar { height: 100%; background-color: var(--accent-blue); width: 0%; transition: width 0.1s ease; }
-
-        .main-grid { display: grid; grid-template-columns: 400px 1fr; gap: 16px; }
+        .main-grid { display: grid; grid-template-columns: 500px 1fr; gap: 12px; }
         @media (max-width: 960px) { .main-grid { grid-template-columns: 1fr; } }
 
-        .panel { background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-        .panel-title { font-size: 14px; font-weight: 600; color: #fff; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
+        /* 表格字型對齊強化 */
+        .table-box { max-height: 520px; overflow-y: auto; }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+        th { background: var(--card); color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; position: sticky; top: 0; z-index: 2; }
+        
+        /* 數字類欄位全數強制等寬對齊 */
+        .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
+        
+        tr:hover { background: rgba(255,255,255,0.03); cursor: pointer; }
+        tr.active { background: rgba(56,139,253,0.12); }
 
-        .table-container { overflow-y: auto; max-height: 580px; }
-        table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
-        th { color: var(--text-secondary); padding: 8px 6px; border-bottom: 1px solid var(--border-color); position: sticky; top: 0; background-color: var(--bg-secondary); }
-        td { padding: 8px 6px; border-bottom: 1px solid rgba(48, 54, 61, 0.5); cursor: pointer; }
-        tr:hover { background-color: var(--bg-card); }
-        tr.active-row { background-color: rgba(88, 166, 255, 0.15); }
+        /* 標籤設計 */
+        .badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 700; font-family: var(--font-mono); text-align: center; }
+        .bg-long { background: rgba(0,192,118,0.15); color: var(--green); border: 1px solid rgba(0,192,118,0.3); }
+        .bg-short { background: rgba(255,83,83,0.15); color: var(--red); border: 1px solid rgba(255,83,83,0.3); }
+        .bg-tag { background: rgba(163,113,247,0.15); color: var(--purple); border: 1px solid rgba(163,113,247,0.3); }
 
-        .tag { padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; display: inline-block; }
-        .tag-bull { background-color: rgba(46, 160, 67, 0.2); color: var(--accent-green); }
-        .tag-bear { background-color: rgba(218, 54, 51, 0.2); color: var(--accent-red); }
-        .tag-strategy { background-color: rgba(188, 140, 255, 0.15); color: var(--accent-purple); border: 1px solid rgba(188, 140, 255, 0.3); }
+        /* 卡片指標 */
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+        .metric { background: var(--bg); padding: 10px; border-radius: 5px; border: 1px solid var(--border); }
+        .metric-title { font-size: 11px; color: var(--muted); }
+        .metric-val { font-size: 15px; font-weight: 700; font-family: var(--font-mono); color: #fff; margin-top: 4px; }
 
-        .chart-container { position: relative; height: 380px; width: 100%; }
-
-        .metrics-banner { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 8px; }
-        .metric-box { background-color: var(--bg-card); padding: 10px; border-radius: 6px; border: 1px solid var(--border-color); }
-        .metric-label { font-size: 11px; color: var(--text-secondary); }
-        .metric-value { font-size: 15px; font-weight: 600; color: #fff; margin-top: 2px; }
-
-        .risk-calculator { background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; align-items: center; }
-        .log-feed { font-family: monospace; font-size: 11px; background-color: #0d1117; padding: 10px; border-radius: 6px; height: 100px; overflow-y: auto; border: 1px solid var(--border-color); color: #a3b8cc; }
+        /* 終端機日誌 */
+        .log-box { font-family: var(--font-mono); font-size: 11px; background: #05070a; padding: 8px 12px; border-radius: 4px; height: 120px; overflow-y: auto; color: var(--muted); border: 1px solid var(--border); }
+        .progress { height: 3px; background: var(--blue); width: 0%; transition: width 0.1s; }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>🎯 SMC 全市場掃描器 (純 REST API 輪詢 / TG 推播版)</h1>
-        <div class="status-badge">
-            <span class="status-dot"></span>
-            <span>REST API 模式 (無 WebSocket)</span>
-        </div>
+        <h1>⚡ SMC 市場掃描器 <span style="font-size:12px; color:var(--muted); font-weight:normal;">(成交量 ≥ 1 億 USDT 嚴選版)</span></h1>
+        <span id="updateTime" class="num" style="color:var(--muted); font-size:11px;">準備就緒</span>
     </header>
 
-    <!-- Telegram Bot 警報推播設定區 -->
-    <div class="tg-panel">
-        <label>🤖 Telegram 即時推播設定：</label>
-        <input type="password" id="tgBotToken" placeholder="Bot Token (如: 123456:ABC...)" style="width: 240px;" onchange="saveTgSettings()">
-        <input type="text" id="tgChatId" placeholder="Chat ID (如: -1001234567)" style="width: 180px;" onchange="saveTgSettings()">
-        <button class="btn-tg" onclick="testTelegramNotification()">✈️ 測試發送通知</button>
-        <span style="font-size: 11px; color: var(--text-secondary); margin-left: auto;">*自動儲存於瀏覽器</span>
+    <!-- Telegram 推播設定區 -->
+    <div class="panel flex" style="background: rgba(56,139,253,0.05);">
+        <span style="color:var(--blue); font-weight:bold;">🤖 TG 自動警報:</span>
+        <input type="password" id="tgToken" placeholder="Bot Token" style="width: 200px;" onchange="saveTg()">
+        <input type="text" id="tgChatId" placeholder="Chat ID" style="width: 130px;" onchange="saveTg()">
+        <button onclick="testTg()" style="background:#1f6feb;">✈️ 測試推播</button>
     </div>
 
-    <div class="controls">
-        <div class="control-group">
-            <label>戰法篩選：</label>
-            <select id="strategyFilter" onchange="renderTable()">
-                <option value="ALL">全部 SMC 戰法</option>
-                <option value="SFP">1. SFP 假突破抓反轉</option>
-                <option value="FVG">2. FVG 缺口回補</option>
-            </select>
-        </div>
+    <!-- 條件控制區 -->
+    <div class="panel flex">
+        <label style="color:var(--muted)">成交量過濾:</label>
+        <select id="volFilter" onchange="scanMarket()">
+            <option value="100000000" selected>≥ 1 億 USDT</option>
+            <option value="50000000">≥ 5,000 萬 USDT</option>
+            <option value="500000000">≥ 5 億 USDT</option>
+            <option value="0">全部幣種 (無視量)</option>
+        </select>
 
-        <button id="scanBtn" onclick="scanAllMarketSMC()">⚡ 全市場 200+ 標的一鍵掃描</button>
-        <span id="lastUpdate" style="margin-left: auto; color: var(--text-secondary); font-size: 12px;">最後更新: --:--:--</span>
-        
-        <div class="progress-bar-container" id="progressContainer">
-            <div class="progress-bar" id="progressBar"></div>
-        </div>
+        <label style="color:var(--muted); margin-left:8px;">戰法:</label>
+        <select id="stratFilter" onchange="renderTable()">
+            <option value="ALL">全部戰法</option>
+            <option value="SFP">SFP 假突破</option>
+            <option value="FVG">FVG 缺口</option>
+        </select>
+
+        <button id="scanBtn" onclick="scanMarket()" style="margin-left:auto;">🚀 開始極速掃描</button>
     </div>
+    <div style="margin-bottom: 12px;"><div id="progBar" class="progress"></div></div>
 
     <div class="main-grid">
-        <!-- 左側：即時數據掃描清單 -->
-        <div class="panel">
-            <div class="panel-title">
-                <span>🔥 即時觸發訊號標的 (USDT-M 15m)</span>
-                <span id="signalCount" style="color: var(--accent-yellow);">未開始掃描</span>
+        <!-- 左側：排版精準對齊清單 -->
+        <div class="panel" style="padding:0;">
+            <div style="padding:10px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+                <b>🔥 符合條件標的</b>
+                <span id="sigCount" class="badge bg-tag">0 個</span>
             </div>
-
-            <div class="table-container">
+            <div class="table-box">
                 <table>
                     <thead>
                         <tr>
-                            <th>幣種</th>
-                            <th>最新價 (USDT)</th>
-                            <th>觸發戰法</th>
-                            <th>方向</th>
+                            <th style="width:25%">幣種</th>
+                            <th style="width:22%" class="num">即時價格</th>
+                            <th style="width:23%" class="num">24h 成交量</th>
+                            <th style="width:15%">戰法</th>
+                            <th style="width:15%; text-align:center;">方向</th>
                         </tr>
                     </thead>
-                    <tbody id="scannerTableBody"></tbody>
+                    <tbody id="listBody"></tbody>
                 </table>
             </div>
         </div>
 
-        <!-- 右側：詳細分析與圖表 -->
-        <div class="panel">
-            <div class="metrics-banner">
-                <div class="metric-box">
-                    <div class="metric-label">當前選擇標的</div>
-                    <div class="metric-value" id="currentSymbol">--</div>
-                </div>
-                <div class="metric-box">
-                    <div class="metric-label">即時價格 (REST API)</div>
-                    <div class="metric-value" id="currentPrice">0.00 USDT</div>
-                </div>
-                <div class="metric-box">
-                    <div class="metric-label">觸發機構戰法</div>
-                    <div class="metric-value" id="currentStrategy" style="font-size: 13px; color: var(--accent-purple);">--</div>
-                </div>
-                <div class="metric-box">
-                    <div class="metric-label">進場 / 止損 (USDT)</div>
-                    <div class="metric-value" id="currentTradePlan" style="font-size: 12px; color: var(--accent-yellow);">-- / --</div>
+        <!-- 右側：風控與即時面板 -->
+        <div class="panel flex" style="flex-direction:column; align-items:stretch; gap:10px;">
+            <div class="grid-4">
+                <div class="metric"><div class="metric-title">當前標的</div><div class="metric-val" id="mSymbol">--</div></div>
+                <div class="metric"><div class="metric-title">即時價格</div><div class="metric-val" id="mPrice">0.0000</div></div>
+                <div class="metric"><div class="metric-title">機構戰法</div><div class="metric-val" id="mStrat" style="color:var(--purple)">--</div></div>
+                <div class="metric"><div class="metric-title">建議止損位</div><div class="metric-val" id="mSL" style="color:var(--red)">--</div></div>
+            </div>
+
+            <!-- 動態風控計算機 -->
+            <div class="panel flex" style="background:var(--bg); margin:0;">
+                <label style="color:var(--muted)">本金 ($):</label>
+                <input type="number" id="balance" class="num" value="1000" style="width:80px;" oninput="calcRisk()">
+                <label style="color:var(--muted)">風險 (%):</label>
+                <input type="number" id="risk" class="num" value="2" style="width:50px;" oninput="calcRisk()">
+                <div style="margin-left:auto; text-align:right;">
+                    <span style="color:var(--muted); font-size:11px;">建議倉位名義價值:</span>
+                    <b id="posVal" class="num" style="color:var(--green); font-size:15px; margin-left:6px;">$0.00</b>
                 </div>
             </div>
 
-            <!-- USDT 倉位與風險計算器 -->
-            <div class="risk-calculator">
-                <div>
-                    <label>本金(USDT)</label>
-                    <input type="number" id="accountBalance" value="1000" style="width: 100%;" oninput="calcRisk()">
-                </div>
-                <div>
-                    <label>風險 (%)</label>
-                    <input type="number" id="riskPercent" value="2" style="width: 100%;" oninput="calcRisk()">
-                </div>
-                <div>
-                    <label>槓桿 (x)</label>
-                    <input type="number" id="leverage" value="10" min="1" max="125" style="width: 100%;" oninput="calcRisk()">
-                </div>
-                <div>
-                    <span class="metric-label">最大虧損：</span>
-                    <div id="maxLossUsdt" style="color: var(--accent-red); font-weight: 600;">20.00 USDT</div>
-                </div>
-                <div>
-                    <span class="metric-label">倉位名義價值：</span>
-                    <div id="suggestedPosition" style="color: var(--accent-green); font-weight: 600;">0.00 USDT</div>
-                </div>
-                <div>
-                    <span class="metric-label">預計保證金：</span>
-                    <div id="requiredMargin" style="color: var(--accent-blue); font-weight: 600;">0.00 USDT</div>
-                </div>
-            </div>
-
-            <div class="panel-title" style="margin-top: 6px;">
-                <span>📈 15m K 線歷史收盤價與動態止損位</span>
-            </div>
-
-            <div class="chart-container">
-                <canvas id="klineChart"></canvas>
-            </div>
-
-            <div class="log-feed" id="logFeed"></div>
+            <!-- 即時狀態日誌 -->
+            <div class="log-box" id="logBox"></div>
         </div>
     </div>
 
     <script>
-        let marketDataMap = {};
-        let currentItem = null;
-        let chartInstance = null;
-        let isScanning = false;
-        let pollingTimer = null;
-        
-        // Telegram 已推播訊號紀錄 (防止重複發送)
-        let notifiedSignals = new Set();
+        let signals = {}, curItem = null, isScanning = false, tgHistory = new Set();
 
-        window.onload = function() {
-            initChart();
-            loadTgSettings();
-            scanAllMarketSMC();
-            startPollingLatestPrices(); // 啟動 HTTP 輪詢
+        window.onload = () => {
+            document.getElementById("tgToken").value = localStorage.getItem("SMC_TG_TK") || "";
+            document.getElementById("tgChatId").value = localStorage.getItem("SMC_TG_CID") || "";
+            scanMarket();
+            setInterval(pollPrices, 5000); // 5秒極輕量輪詢
         };
 
-        // Telegram 設定管理
-        function loadTgSettings() {
-            document.getElementById("tgBotToken").value = localStorage.getItem("SMC_TG_BOT_TOKEN") || "";
-            document.getElementById("tgChatId").value = localStorage.getItem("SMC_TG_CHAT_ID") || "";
+        function saveTg() {
+            localStorage.setItem("SMC_TG_TK", document.getElementById("tgToken").value.trim());
+            localStorage.setItem("SMC_TG_CID", document.getElementById("tgChatId").value.trim());
         }
 
-        function saveTgSettings() {
-            const token = document.getElementById("tgBotToken").value.trim();
-            const chatId = document.getElementById("tgChatId").value.trim();
-            localStorage.setItem("SMC_TG_BOT_TOKEN", token);
-            localStorage.setItem("SMC_TG_CHAT_ID", chatId);
-        }
-
-        // 發送 Telegram 訊息核心函式
-        async function sendTelegramMessage(text) {
-            const token = document.getElementById("tgBotToken").value.trim();
-            const chatId = document.getElementById("tgChatId").value.trim();
-
-            if (!token || !chatId) {
-                logEvent("⚠️ 未設定 Telegram Bot Token 或 Chat ID，跳過 TG 推播。");
-                return false;
-            }
-
-            const url = `https://api.telegram.org/bot${token}/sendMessage`;
+        async function sendTg(msg) {
+            const tk = localStorage.getItem("SMC_TG_TK"), cid = localStorage.getItem("SMC_TG_CID");
+            if (!tk || !cid) return false;
             try {
-                const res = await fetch(url, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        chat_id: chatId,
-                        text: text,
-                        parse_mode: "HTML"
-                    })
+                const res = await fetch(`https://api.telegram.org/bot${tk}/sendMessage`, {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ chat_id: cid, text: msg, parse_mode: "HTML" })
                 });
-                const data = await res.json();
-                if (data.ok) {
-                    logEvent("✈️ Telegram 訊號警報推播成功！");
-                    return true;
-                } else {
-                    logEvent(`❌ Telegram 發送失敗: ${data.description}`);
-                    return false;
-                }
-            } catch (err) {
-                logEvent(`❌ Telegram API 請求失敗: ${err.message}`);
-                return false;
-            }
+                return (await res.json()).ok;
+            } catch (e) { return false; }
         }
 
-        // 測試發送 Telegram 按鈕
-        async function testTelegramNotification() {
-            saveTgSettings();
-            const msg = `<b>🚨 SMC 機構掃描器 - Telegram 連線測試</b>\n\n🟢 您的 Telegram Bot Webhook 設定成功！即時訊號推播功能已就緒 (REST API 模式)。`;
-            const ok = await sendTelegramMessage(msg);
-            if (ok) alert("✅ 測試訊息發送成功！請查看您的 Telegram。");
-            else alert("❌ 發送失敗，請確認 Token 與 Chat ID 是否正確。");
+        async function testTg() {
+            saveTg();
+            if (await sendTg("🟢 <b>[SMC 測試] Telegram 警報系統正常運作中！</b>")) alert("發送成功！");
+            else alert("發送失敗，請確認 Token 與 Chat ID。");
         }
 
-        // 動態獲取幣安標的
-        async function fetchAllUsdtSymbols() {
-            try {
-                const res = await fetch("https://fapi.binance.com/fapi/v1/exchangeInfo");
-                const data = await res.json();
-                return data.symbols
-                    .filter(s => s.quoteAsset === "USDT" && s.contractType === "PERPETUAL" && s.status === "TRADING")
-                    .map(s => s.symbol);
-            } catch (err) {
-                logEvent(`❌ 獲取市場交易對失敗: ${err.message}`);
-                return [];
-            }
+        // 成交量格式化 (如 1.25B / 150.5M)
+        function formatVol(v) {
+            if (v >= 1e9) return (v / 1e9).toFixed(2) + 'B';
+            if (v >= 1e6) return (v / 1e6).toFixed(1) + 'M';
+            return (v / 1e3).toFixed(0) + 'K';
         }
 
-        // 全市場 SMC 掃描 (HTTP)
-        async function scanAllMarketSMC() {
+        async function scanMarket() {
             if (isScanning) return;
             isScanning = true;
+            const btn = document.getElementById("scanBtn"), pBar = document.getElementById("progBar");
+            const minVol = +document.getElementById("volFilter").value;
+            btn.disabled = true; signals = {}; renderTable();
+            log(`🌐 開始掃描幣安永續合約 (過濾 24h 量 ≥ ${formatVol(minVol)})...`);
 
-            const scanBtn = document.getElementById("scanBtn");
-            const progressContainer = document.getElementById("progressContainer");
-            const progressBar = document.getElementById("progressBar");
-
-            scanBtn.disabled = true;
-            progressContainer.style.display = "block";
-            progressBar.style.width = "0%";
-            marketDataMap = {}; 
-            renderTable();
-
-            logEvent("🌐 開始向幣安 API 獲取全市場 USDT 永續合約標的...");
-            const symbols = await fetchAllUsdtSymbols();
-            logEvent(`✅ 成功獲取 ${symbols.length} 個交易對！開始執行 SMC 戰法分析...`);
-
-            const BATCH_SIZE = 12;
-            let completed = 0;
-
-            for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
-                const chunk = symbols.slice(i, i + BATCH_SIZE);
+            try {
+                // 1. 抓取所有合約 24小時成交量 ticker
+                const tRes = await fetch("https://fapi.binance.com/fapi/v1/ticker/24hr");
+                const tData = await tRes.json();
                 
-                await Promise.all(chunk.map(async (symbol) => {
-                    try {
-                        const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=15m&limit=35`);
-                        if (!res.ok) return;
-                        
-                        const rawKlines = await res.json();
-                        const klines = rawKlines.map(k => ({
-                            high: parseFloat(k[2]),
-                            low: parseFloat(k[3]),
-                            close: parseFloat(k[4])
-                        }));
+                // 過濾 USDT 永續合約且成交量高於指定門檻
+                const qualified = tData.filter(t => 
+                    t.symbol.endsWith("USDT") && 
+                    +t.quoteVolume >= minVol
+                ).sort((a,b) => +b.quoteVolume - +a.quoteVolume);
 
-                        const smcResult = detectSMC(klines);
-                        if (smcResult) {
-                            const latestPrice = klines[klines.length - 1].close;
-                            marketDataMap[symbol] = {
-                                symbol: symbol,
-                                price: latestPrice,
-                                strategyCode: smcResult.code,
-                                strategyName: smcResult.name,
-                                timeframe: "15m",
-                                direction: smcResult.direction,
-                                entry: latestPrice,
-                                stopLoss: smcResult.stopLoss
-                            };
+                log(`🎯 符合成交量條件標的共 ${qualified.length} 個，開始 SMC 分析...`);
 
-                            // 發送 Telegram 警報
-                            checkAndSendTgAlert(symbol, smcResult, latestPrice);
-                        }
-                    } catch (e) {
-                    } finally {
-                        completed++;
-                    }
-                }));
-
-                const pct = Math.floor((completed / symbols.length) * 100);
-                progressBar.style.width = `${pct}%`;
-                renderTable();
-
-                await new Promise(r => setTimeout(r, 60));
-            }
-
-            isScanning = false;
-            scanBtn.disabled = false;
-            progressContainer.style.display = "none";
-            logEvent(`🎉 全市場掃描完成！共有 ${Object.keys(marketDataMap).length} 個標的符合 SMC 戰法。`);
-            
-            renderTable();
-            updateHeaderTime();
-        }
-
-        // 定時透過 HTTP REST API 輪詢最新價格 (取代 WebSocket)
-        function startPollingLatestPrices() {
-            if (pollingTimer) clearInterval(pollingTimer);
-            
-            pollingTimer = setInterval(async () => {
-                if (Object.keys(marketDataMap).length === 0 || isScanning) return;
-
-                try {
-                    const res = await fetch("https://fapi.binance.com/fapi/v1/ticker/price");
-                    if (!res.ok) return;
-                    const allPrices = await res.json();
-                    
-                    const priceLookup = {};
-                    allPrices.forEach(p => priceLookup[p.symbol] = parseFloat(p.price));
-
-                    let updated = false;
-                    Object.keys(marketDataMap).forEach(symbol => {
-                        if (priceLookup[symbol]) {
-                            const newPrice = priceLookup[symbol];
-                            marketDataMap[symbol].price = newPrice;
-                            marketDataMap[symbol].entry = newPrice;
-                            updated = true;
-
-                            if (currentItem && currentItem.symbol === symbol) {
-                                document.getElementById("currentPrice").innerText = `$${newPrice} USDT`;
-                                document.getElementById("currentTradePlan").innerText = `進: ${newPrice} | 損: ${marketDataMap[symbol].stopLoss}`;
-                                calcRisk();
+                // 2. 批次並行掃描 K 線
+                const batchSize = 15;
+                for (let i = 0; i < qualified.length; i += batchSize) {
+                    const chunk = qualified.slice(i, i + batchSize);
+                    await Promise.all(chunk.map(async (item) => {
+                        const sym = item.symbol;
+                        try {
+                            const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${sym}&interval=15m&limit=30`);
+                            if (!res.ok) return;
+                            const klines = (await res.json()).map(k => ({ high: +k[2], low: +k[3], close: +k[4] }));
+                            const smc = detectSMC(klines);
+                            if (smc) {
+                                const price = klines[klines.length - 1].close;
+                                const vol = +item.quoteVolume;
+                                signals[sym] = { sym, price, vol, ...smc };
+                                checkAndSendTg(sym, smc, price, vol);
                             }
-                        }
-                    });
-
-                    if (updated) {
-                        renderTable();
-                        updateHeaderTime();
-                    }
-                } catch (e) {
-                    console.error("價格輪詢失敗:", e);
+                        } catch(e){}
+                    }));
+                    pBar.style.width = `${Math.floor(((i + batchSize) / qualified.length) * 100)}%`;
+                    renderTable();
+                    await new Promise(r => setTimeout(r, 30));
                 }
-            }, 5000); // 每 5 秒輪詢一次
+                log(`🎉 掃描完成！共發現 ${Object.keys(signals).length} 個 SMC 觸發訊號。`);
+            } catch(e) { log(`❌ 掃描出錯: ${e.message}`); }
+
+            isScanning = false; btn.disabled = false; pBar.style.width = "0%";
+            updateTime();
         }
 
-        // 發送 Telegram 警報 (附冷卻過濾)
-        function checkAndSendTgAlert(symbol, smc, price) {
-            const signalKey = `${symbol}_${smc.code}_${smc.direction}`;
-            if (notifiedSignals.has(signalKey)) return; 
-
-            notifiedSignals.add(signalKey); 
-
-            const dirEmoji = smc.direction === "LONG" ? "🟢 做多 (LONG)" : "🔴 做空 (SHORT)";
-            const stopLossPct = (Math.abs(price - smc.stopLoss) / price * 100).toFixed(2);
-
-            const tgMessage = 
-`🎯 <b>【SMC 機構戰法觸發通知】</b>
-
-📌 <b>標的幣種</b>：<code>${symbol}</code>
-⚡ <b>觸發戰法</b>：<b>${smc.name}</b>
-📈 <b>操作方向</b>：${dirEmoji}
-💵 <b>當前價格</b>：<code>$${price} USDT</code>
-🛡️ <b>動態止損</b>：<code>$${smc.stopLoss} USDT</code> (預估風險: ${stopLossPct}%)
-⏱️ <b>K線週期</b>：15m
-⏰ <b>觸發時間</b>：${new Date().toTimeString().split(' ')[0]}
-
-<i>💡 請根據風控計算器妥善安排倉位保證金。</i>`;
-
-            sendTelegramMessage(tgMessage);
-        }
-
-        // SMC 戰法判定邏輯
         function detectSMC(klines) {
             const len = klines.length;
             if (len < 10) return null;
-
             const curr = klines[len - 1];
-            const prevSlice = klines.slice(len - 25, len - 2);
+            const prev = klines.slice(len - 25, len - 2);
+            const hi = Math.max(...prev.map(k => k.high)), lo = Math.min(...prev.map(k => k.low));
 
-            const highestHigh = Math.max(...prevSlice.map(k => k.high));
-            const lowestLow = Math.min(...prevSlice.map(k => k.low));
+            // SFP 假突破
+            if (curr.high > hi && curr.close < hi) return { code: "SFP", name: "SFP 看跌假突破", dir: "SHORT", sl: +(curr.high * 1.0015).toFixed(4) };
+            if (curr.low < lo && curr.close > lo) return { code: "SFP", name: "SFP 看漲假突破", dir: "LONG", sl: +(curr.low * 0.9985).toFixed(4) };
 
-            // SFP 假突破 (看跌)
-            if (curr.high > highestHigh && curr.close < highestHigh) {
-                return { code: "SFP", name: "SFP 假突破 (獵殺多頭)", direction: "SHORT", stopLoss: parseFloat((curr.high * 1.0015).toFixed(4)) };
-            }
-
-            // SFP 假突破 (看漲)
-            if (curr.low < lowestLow && curr.close > lowestLow) {
-                return { code: "SFP", name: "SFP 假突破 (獵殺空頭)", direction: "LONG", stopLoss: parseFloat((curr.low * 0.9985).toFixed(4)) };
-            }
-
-            // FVG 缺口 (近三根 K 線)
-            const k1 = klines[len - 3];
-            const k3 = klines[len - 1];
-
-            if (k1.high < k3.low) {
-                return { code: "FVG", name: "FVG 看漲缺口", direction: "LONG", stopLoss: parseFloat((k1.high * 0.998).toFixed(4)) };
-            }
-            if (k1.low > k3.high) {
-                return { code: "FVG", name: "FVG 看跌缺口", direction: "SHORT", stopLoss: parseFloat((k1.low * 1.002).toFixed(4)) };
-            }
+            // FVG 缺口
+            const k1 = klines[len - 3], k3 = klines[len - 1];
+            if (k1.high < k3.low) return { code: "FVG", name: "FVG 看漲缺口", dir: "LONG", sl: +(k1.high * 0.998).toFixed(4) };
+            if (k1.low > k3.high) return { code: "FVG", name: "FVG 看跌缺口", dir: "SHORT", sl: +(k1.low * 1.002).toFixed(4) };
 
             return null;
         }
 
-        function selectSymbol(item) {
-            currentItem = item;
-            document.getElementById("currentSymbol").innerText = item.symbol;
-            document.getElementById("currentPrice").innerText = `$${item.price} USDT`;
-            document.getElementById("currentStrategy").innerText = `${item.strategyName} (${item.timeframe})`;
-            document.getElementById("currentTradePlan").innerText = `進: ${item.entry} | 損: ${item.stopLoss}`;
+        function checkAndSendTg(sym, smc, price, vol) {
+            const key = `${sym}_${smc.code}_${smc.dir}`;
+            if (tgHistory.has(key)) return;
+            tgHistory.add(key);
 
-            renderTable();
-            calcRisk();
-            logEvent(`🎯 切換標的 ${item.symbol} - 載入歷史圖表...`);
-
-            fetchHistoricalKlines(item.symbol);
+            const msg = `🎯 <b>[SMC 訊號觸發]</b>\n\n📌 <b>標的</b>: <code>${sym}</code>\n📊 <b>24h量</b>: $${formatVol(vol)}\n⚡ <b>戰法</b>: ${smc.name}\n📈 <b>方向</b>: ${smc.dir}\n💵 <b>價格</b>: $${price}\n🛡️ <b>止損</b>: $${smc.sl}`;
+            sendTg(msg);
         }
 
-        function fetchHistoricalKlines(symbol) {
-            const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=15m&limit=30`;
-            return fetch(url)
-                .then(res => res.json())
-                .then(data => {
-                    const closePrices = data.map(k => parseFloat(k[4]));
-                    const times = data.map(k => {
-                        const date = new Date(k[0]);
-                        return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-                    });
+        async function pollPrices() {
+            const keys = Object.keys(signals);
+            if (keys.length === 0 || isScanning) return;
+            try {
+                const res = await fetch("https://fapi.binance.com/fapi/v1/ticker/price");
+                if (!res.ok) return;
+                const pData = await res.json();
+                const pMap = {};
+                pData.forEach(p => pMap[p.symbol] = +p.price);
 
-                    chartInstance.data.labels = times;
-                    chartInstance.data.datasets[0].data = closePrices;
-                    chartInstance.data.datasets[1].data = Array(30).fill(currentItem.stopLoss);
-                    chartInstance.update();
-                })
-                .catch(err => logEvent(`⚠️ 歷史 K 線載入失敗: ${err.message}`));
+                keys.forEach(sym => {
+                    if (pMap[sym]) {
+                        signals[sym].price = pMap[sym];
+                        if (curItem && curItem.sym === sym) {
+                            curItem.price = pMap[sym];
+                            document.getElementById("mPrice").innerText = pMap[sym].toFixed(4);
+                            calcRisk();
+                        }
+                    }
+                });
+                renderTable();
+                updateTime();
+            } catch(e){}
         }
 
         function renderTable() {
-            const filter = document.getElementById("strategyFilter").value;
-            const tbody = document.getElementById("scannerTableBody");
+            const filter = document.getElementById("stratFilter").value;
+            const tbody = document.getElementById("listBody");
             tbody.innerHTML = "";
-
             let count = 0;
-            const items = Object.values(marketDataMap);
 
-            items.forEach(item => {
-                if (filter !== "ALL" && item.strategyCode !== filter) return;
+            Object.values(signals).forEach(item => {
+                if (filter !== "ALL" && item.code !== filter) return;
                 count++;
-
                 const tr = document.createElement("tr");
-                if (currentItem && item.symbol === currentItem.symbol) tr.className = "active-row";
-                tr.onclick = () => selectSymbol(item);
+                if (curItem && curItem.sym === item.sym) tr.className = "active";
+                tr.onclick = () => selectItem(item);
 
-                const dirClass = item.direction === "LONG" ? "tag-bull" : "tag-bear";
-                const dirText = item.direction === "LONG" ? "做多 🟢" : "做空 🔴";
-
+                const bg = item.dir === "LONG" ? "bg-long" : "bg-short";
                 tr.innerHTML = `
-                    <td style="font-weight:600; color:#fff;">${item.symbol}</td>
-                    <td>$${item.price} USDT</td>
-                    <td><span class="tag tag-strategy">${item.strategyCode}</span></td>
-                    <td><span class="tag ${dirClass}">${dirText}</span></td>
+                    <td><b>${item.sym}</b></td>
+                    <td class="num">$${item.price.toFixed(4)}</td>
+                    <td class="num" style="color:var(--muted)">$${formatVol(item.vol)}</td>
+                    <td><span class="badge bg-tag">${item.code}</span></td>
+                    <td style="text-align:center;"><span class="badge ${bg}">${item.dir}</span></td>
                 `;
                 tbody.appendChild(tr);
             });
 
-            document.getElementById("signalCount").innerText = isScanning 
-                ? `掃描中... 已發現 ${count} 個` 
-                : `共 ${count} 個訊號`;
+            document.getElementById("sigCount").innerText = `${count} 個`;
+            if (count > 0 && !curItem) selectItem(Object.values(signals)[0]);
+        }
 
-            if (items.length > 0 && !currentItem) {
-                selectSymbol(items[0]);
-            }
+        function selectItem(item) {
+            curItem = item;
+            document.getElementById("mSymbol").innerText = item.sym;
+            document.getElementById("mPrice").innerText = item.price.toFixed(4);
+            document.getElementById("mStrat").innerText = `${item.code} (${item.dir})`;
+            document.getElementById("mSL").innerText = item.sl.toFixed(4);
+            renderTable();
+            calcRisk();
         }
 
         function calcRisk() {
-            if (!currentItem || currentItem.price === 0) return;
-            const balance = parseFloat(document.getElementById("accountBalance").value) || 0;
-            const riskPct = parseFloat(document.getElementById("riskPercent").value) || 0;
-            const leverage = parseFloat(document.getElementById("leverage").value) || 1;
-
-            const maxLoss = balance * (riskPct / 100);
-            document.getElementById("maxLossUsdt").innerText = `$${maxLoss.toFixed(2)}`;
-
-            const priceDiff = Math.abs(currentItem.entry - currentItem.stopLoss);
-            if (priceDiff > 0) {
-                const stopLossPct = priceDiff / currentItem.entry;
-                const positionSize = maxLoss / stopLossPct;
-                const marginRequired = positionSize / leverage;
-
-                document.getElementById("suggestedPosition").innerText = `$${positionSize.toFixed(2)}`;
-                
-                const marginElem = document.getElementById("requiredMargin");
-                marginElem.innerText = `$${marginRequired.toFixed(2)}`;
-                marginElem.style.color = marginRequired > balance ? "var(--accent-red)" : "var(--accent-blue)";
+            if (!curItem) return;
+            const bal = +document.getElementById("balance").value || 0;
+            const risk = +document.getElementById("risk").value || 0;
+            const diff = Math.abs(curItem.price - curItem.sl);
+            if (diff > 0) {
+                const pos = (bal * (risk / 100)) / (diff / curItem.price);
+                document.getElementById("posVal").innerText = `$${pos.toFixed(2)}`;
             }
         }
 
-        function updateHeaderTime() {
-            document.getElementById("lastUpdate").innerText = `最後更新: ${new Date().toTimeString().split(' ')[0]}`;
+        function log(m) {
+            const box = document.getElementById("logBox");
+            box.innerHTML = `<div>[${new Date().toTimeString().split(' ')[0]}] ${m}</div>` + box.innerHTML;
         }
 
-        function logEvent(msg) {
-            const feed = document.getElementById("logFeed");
-            const div = document.createElement("div");
-            div.innerHTML = `<span style="color:var(--text-secondary)">[${new Date().toTimeString().split(' ')[0]}]</span> ${msg}`;
-            feed.prepend(div);
-        }
-
-        function initChart() {
-            const ctx = document.getElementById('klineChart').getContext('2d');
-            chartInstance = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: [],
-                    datasets: [
-                        { label: 'K 線歷史收盤價 (USDT)', data: [], borderColor: '#58a6ff', borderWidth: 2, tension: 0.1 },
-                        { label: 'SMC 建議動態止損位', data: [], borderColor: '#da3633', borderWidth: 1.5, borderDash: [4, 4] }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    animation: false,
-                    plugins: { legend: { labels: { color: '#8b949e' } } },
-                    scales: {
-                        x: { grid: { color: '#30363d' }, ticks: { color: '#8b949e' } },
-                        y: { grid: { color: '#30363d' }, ticks: { color: '#8b949e' } }
-                    }
-                }
-            });
+        function updateTime() {
+            document.getElementById("updateTime").innerText = `最後更新: ${new Date().toTimeString().split(' ')[0]}`;
         }
     </script>
 </body>
