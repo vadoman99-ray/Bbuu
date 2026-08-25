@@ -3,13 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SMC 交易量 1 億以上極速掃描器</title>
+    <title>SMC 專業市場掃描器 (全功能恢復版)</title>
     <style>
         :root {
             --bg: #0b0e14; --card: #151921; --border: #262c36;
             --text: #e1e7ed; --muted: #788596;
             --green: #00c076; --red: #ff5353; --blue: #388bfd; --purple: #a371f7;
-            /* 採用等寬與無襯線混合系統字型，確保數據對齊 */
             --font-mono: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
             --font-main: system-ui, -apple-system, sans-serif;
         }
@@ -20,7 +19,6 @@
         header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
         h1 { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: 0.5px; }
 
-        /* 統一控制列 */
         .panel { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 10px; margin-bottom: 12px; }
         .flex { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
         
@@ -32,31 +30,26 @@
         .main-grid { display: grid; grid-template-columns: 500px 1fr; gap: 12px; }
         @media (max-width: 960px) { .main-grid { grid-template-columns: 1fr; } }
 
-        /* 表格字型對齊強化 */
         .table-box { max-height: 520px; overflow-y: auto; }
         table { width: 100%; border-collapse: collapse; text-align: left; }
         th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
         th { background: var(--card); color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; position: sticky; top: 0; z-index: 2; }
         
-        /* 數字類欄位全數強制等寬對齊 */
         .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
         
         tr:hover { background: rgba(255,255,255,0.03); cursor: pointer; }
         tr.active { background: rgba(56,139,253,0.12); }
 
-        /* 標籤設計 */
         .badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 700; font-family: var(--font-mono); text-align: center; }
         .bg-long { background: rgba(0,192,118,0.15); color: var(--green); border: 1px solid rgba(0,192,118,0.3); }
         .bg-short { background: rgba(255,83,83,0.15); color: var(--red); border: 1px solid rgba(255,83,83,0.3); }
         .bg-tag { background: rgba(163,113,247,0.15); color: var(--purple); border: 1px solid rgba(163,113,247,0.3); }
 
-        /* 卡片指標 */
         .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
         .metric { background: var(--bg); padding: 10px; border-radius: 5px; border: 1px solid var(--border); }
         .metric-title { font-size: 11px; color: var(--muted); }
         .metric-val { font-size: 15px; font-weight: 700; font-family: var(--font-mono); color: #fff; margin-top: 4px; }
 
-        /* 終端機日誌 */
         .log-box { font-family: var(--font-mono); font-size: 11px; background: #05070a; padding: 8px 12px; border-radius: 4px; height: 120px; overflow-y: auto; color: var(--muted); border: 1px solid var(--border); }
         .progress { height: 3px; background: var(--blue); width: 0%; transition: width 0.1s; }
     </style>
@@ -64,11 +57,10 @@
 <body>
 
     <header>
-        <h1>⚡ SMC 市場掃描器 <span style="font-size:12px; color:var(--muted); font-weight:normal;">(成交量 ≥ 1 億 USDT 嚴選版)</span></h1>
+        <h1>⚡ SMC 市場掃描器 <span style="font-size:12px; color:var(--muted); font-weight:normal;">(恢復全功能版)</span></h1>
         <span id="updateTime" class="num" style="color:var(--muted); font-size:11px;">準備就緒</span>
     </header>
 
-    <!-- Telegram 推播設定區 -->
     <div class="panel flex" style="background: rgba(56,139,253,0.05);">
         <span style="color:var(--blue); font-weight:bold;">🤖 TG 自動警報:</span>
         <input type="password" id="tgToken" placeholder="Bot Token" style="width: 200px;" onchange="saveTg()">
@@ -76,7 +68,6 @@
         <button onclick="testTg()" style="background:#1f6feb;">✈️ 測試推播</button>
     </div>
 
-    <!-- 條件控制區 -->
     <div class="panel flex">
         <label style="color:var(--muted)">成交量過濾:</label>
         <select id="volFilter" onchange="scanMarket()">
@@ -98,7 +89,6 @@
     <div style="margin-bottom: 12px;"><div id="progBar" class="progress"></div></div>
 
     <div class="main-grid">
-        <!-- 左側：排版精準對齊清單 -->
         <div class="panel" style="padding:0;">
             <div style="padding:10px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
                 <b>🔥 符合條件標的</b>
@@ -120,7 +110,6 @@
             </div>
         </div>
 
-        <!-- 右側：風控與即時面板 -->
         <div class="panel flex" style="flex-direction:column; align-items:stretch; gap:10px;">
             <div class="grid-4">
                 <div class="metric"><div class="metric-title">當前標的</div><div class="metric-val" id="mSymbol">--</div></div>
@@ -129,19 +118,19 @@
                 <div class="metric"><div class="metric-title">建議止損位</div><div class="metric-val" id="mSL" style="color:var(--red)">--</div></div>
             </div>
 
-            <!-- 動態風控計算機 -->
             <div class="panel flex" style="background:var(--bg); margin:0;">
                 <label style="color:var(--muted)">本金 ($):</label>
                 <input type="number" id="balance" class="num" value="1000" style="width:80px;" oninput="calcRisk()">
                 <label style="color:var(--muted)">風險 (%):</label>
                 <input type="number" id="risk" class="num" value="2" style="width:50px;" oninput="calcRisk()">
+                <label style="color:var(--muted)">槓桿:</label>
+                <input type="number" id="lev" class="num" value="10" style="width:50px;" oninput="calcRisk()">
                 <div style="margin-left:auto; text-align:right;">
                     <span style="color:var(--muted); font-size:11px;">建議倉位名義價值:</span>
                     <b id="posVal" class="num" style="color:var(--green); font-size:15px; margin-left:6px;">$0.00</b>
                 </div>
             </div>
 
-            <!-- 即時狀態日誌 -->
             <div class="log-box" id="logBox"></div>
         </div>
     </div>
@@ -153,7 +142,7 @@
             document.getElementById("tgToken").value = localStorage.getItem("SMC_TG_TK") || "";
             document.getElementById("tgChatId").value = localStorage.getItem("SMC_TG_CID") || "";
             scanMarket();
-            setInterval(pollPrices, 5000); // 5秒極輕量輪詢
+            setInterval(pollPrices, 5000);
         };
 
         function saveTg() {
@@ -179,7 +168,6 @@
             else alert("發送失敗，請確認 Token 與 Chat ID。");
         }
 
-        // 成交量格式化 (如 1.25B / 150.5M)
         function formatVol(v) {
             if (v >= 1e9) return (v / 1e9).toFixed(2) + 'B';
             if (v >= 1e6) return (v / 1e6).toFixed(1) + 'M';
@@ -195,11 +183,9 @@
             log(`🌐 開始掃描幣安永續合約 (過濾 24h 量 ≥ ${formatVol(minVol)})...`);
 
             try {
-                // 1. 抓取所有合約 24小時成交量 ticker
                 const tRes = await fetch("https://fapi.binance.com/fapi/v1/ticker/24hr");
                 const tData = await tRes.json();
                 
-                // 過濾 USDT 永續合約且成交量高於指定門檻
                 const qualified = tData.filter(t => 
                     t.symbol.endsWith("USDT") && 
                     +t.quoteVolume >= minVol
@@ -207,7 +193,6 @@
 
                 log(`🎯 符合成交量條件標的共 ${qualified.length} 個，開始 SMC 分析...`);
 
-                // 2. 批次並行掃描 K 線
                 const batchSize = 15;
                 for (let i = 0; i < qualified.length; i += batchSize) {
                     const chunk = qualified.slice(i, i + batchSize);
@@ -244,11 +229,9 @@
             const prev = klines.slice(len - 25, len - 2);
             const hi = Math.max(...prev.map(k => k.high)), lo = Math.min(...prev.map(k => k.low));
 
-            // SFP 假突破
             if (curr.high > hi && curr.close < hi) return { code: "SFP", name: "SFP 看跌假突破", dir: "SHORT", sl: +(curr.high * 1.0015).toFixed(4) };
             if (curr.low < lo && curr.close > lo) return { code: "SFP", name: "SFP 看漲假突破", dir: "LONG", sl: +(curr.low * 0.9985).toFixed(4) };
 
-            // FVG 缺口
             const k1 = klines[len - 3], k3 = klines[len - 1];
             if (k1.high < k3.low) return { code: "FVG", name: "FVG 看漲缺口", dir: "LONG", sl: +(k1.high * 0.998).toFixed(4) };
             if (k1.low > k3.high) return { code: "FVG", name: "FVG 看跌缺口", dir: "SHORT", sl: +(k1.low * 1.002).toFixed(4) };
