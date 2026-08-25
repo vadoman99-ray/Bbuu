@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SMC 永續合約掃描器 (WebSocket極速版)</title>
+  <title>SMC 15m/1m 雙時間框架假突破掃描器</title>
   <style>
     :root {
       --bg-color: #121418;
@@ -36,23 +36,19 @@
       display: flex;
       gap: 10px;
       align-items: center;
-      width: 100%;
-      justify-content: space-between;
     }
-    @media (min-width: 600px) {
-      .controls { width: auto; }
-      h1 { font-size: 1.5rem; }
-    }
-    select, button {
+    button {
       background: var(--card-bg);
       color: #fff;
       border: 1px solid var(--border-color);
-      padding: 8px 12px;
+      padding: 8px 16px;
       border-radius: 4px;
       cursor: pointer;
+      font-weight: bold;
     }
     button:hover { border-color: var(--accent-green); }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
+    
     .table-container {
       width: 100%;
       overflow-x: auto;
@@ -61,12 +57,12 @@
       border: 1px solid var(--border-color);
       background: var(--card-bg);
     }
-    table { width: 100%; min-width: 550px; border-collapse: collapse; }
+    table { width: 100%; min-width: 650px; border-collapse: collapse; }
     th, td {
       padding: 10px 12px;
       text-align: left;
       border-bottom: 1px solid var(--border-color);
-      font-size: 0.9rem;
+      font-size: 0.85rem;
     }
     th { background: #161a25; color: #848e9c; font-weight: 600; white-space: nowrap; }
     tr:hover { background: #262b3e; }
@@ -81,161 +77,166 @@
     .badge-bull { background: rgba(14, 203, 129, 0.15); color: var(--accent-green); }
     .badge-bear { background: rgba(246, 70, 93, 0.15); color: var(--accent-red); }
     .status { font-size: 0.85rem; color: #848e9c; margin-bottom: 10px; min-height: 1.2em; }
+    .price-tag { font-family: monospace; font-weight: bold; }
   </style>
 </head>
 <body>
 
 <div class="container">
   <header>
-    <h1>⚡ SMC 永續合約掃描器</h1>
+    <h1>🎯 15m/1m 雙框架假突破掃描器</h1>
     <div class="controls">
-      <label style="font-size: 0.9rem;">周期：
-        <select id="timeframe">
-          <option value="15m" selected>15 分鐘</option>
-          <option value="1h">1 小時</option>
-          <option value="4h">4 小時</option>
-        </select>
-      </label>
-      <button id="scanBtn" onclick="startScan()">🚀 開始 WebSocket 掃描</button>
+      <button id="scanBtn" onclick="startScan()">🚀 開始掃描雙框架訊號</button>
     </div>
   </header>
 
-  <div class="status" id="statusText">點擊按鈕開啟直連幣安數據通道...</div>
+  <div class="status" id="statusText">點擊按鈕，掃描 15m 鎖定與 1m 精準進場訊號...</div>
 
   <div class="table-container">
     <table>
       <thead>
         <tr>
-          <th>幣種名稱</th>
-          <th>當前價格</th>
-          <th>偵測訊號型態</th>
+          <th>幣種</th>
           <th>方向</th>
-          <th>參考觀察區間</th>
+          <th>15m 觸發狀態</th>
+          <th>1m 進場狀態</th>
+          <th>參考進場價</th>
+          <th>建議止損位</th>
         </tr>
       </thead>
       <tbody id="resultBody">
-        <tr><td colspan="5" style="text-align: center; color: #848e9c;">暫無數據</td></tr>
+        <tr><td colspan="6" style="text-align: center; color: #848e9c;">暫無數據，請點擊上方按鈕開始分析</td></tr>
       </tbody>
     </table>
   </div>
 </div>
 
 <script>
-  // 監控的熱門永續合約幣種清單
-  const TARGET_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'LINKUSDT', 'NEARUSDT'];
-  
-  let ws = null;
-  const klineData = {}; // 暫存每個幣種的 K 線歷史
+  // 代理池，防範 CORS 與 429 限流
+  const PROXIES = [
+    url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+    url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+  ];
+  let proxyIndex = 0;
+  const sleep = ms => new Promise(res => setTimeout(res, ms));
 
-  // SMC 策略邏輯判斷
-  function analyzePattern(klines) {
+  async function fetchAPI(url) {
+    for (let i = 0; i < PROXIES.length; i++) {
+      try {
+        const res = await fetch(PROXIES[proxyIndex](url));
+        if (res.ok) return await res.json();
+      } catch (e) {
+        proxyIndex = (proxyIndex + 1) % PROXIES.length;
+        await sleep(100);
+      }
+    }
+    throw new Error('API 請求失敗');
+  }
+
+  // 獲取前 15 名永續合約熱門幣種
+  async function getTopSymbols() {
+    const data = await fetchAPI('https://fapi.binance.com/fapi/1/ticker/24hr');
+    return data
+      .filter(item => item.symbol.endsWith('USDT'))
+      .sort((a, b) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume))
+      .slice(0, 15)
+      .map(item => item.symbol);
+  }
+
+  // 獲取特定 timeframe 的 K 線數據
+  async function getKlines(symbol, interval, limit = 20) {
+    const data = await fetchAPI(`https://fapi.binance.com/fapi/1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
+    return data.map(k => ({
+      high: parseFloat(k[2]),
+      low: parseFloat(k[3]),
+      close: parseFloat(k[4]),
+      open: parseFloat(k[1])
+    }));
+  }
+
+  // 檢測 Sweep（假突破掠奪）：突破前高/低點但收盤收回
+  function checkSweep(klines) {
     const len = klines.length;
     if (len < 5) return null;
 
-    const k1 = klines[len - 3];
-    const k2 = klines[len - 2];
-    const k3 = klines[len - 1];
+    const current = klines[len - 1]; // 最新收盤/當前 K 線
+    const prevHigh = Math.max(...klines.slice(len - 12, len - 1).map(k => k.high));
+    const prevLow = Math.min(...klines.slice(len - 12, len - 1).map(k => k.low));
 
-    // 1. FVG 缺口 (第6招)
-    if (k1.high < k3.low) return { pattern: 'FVG 缺口', type: '看多 (Bullish)', range: `${k1.high} - ${k3.low}` };
-    if (k1.low > k3.high) return { pattern: 'FVG 缺口', type: '看空 (Bearish)', range: `${k3.high} - ${k1.low}` };
-
-    // 2. 假突破/流動性掠奪 (第1、2招)
-    const prevHigh = Math.max(...klines.slice(len - 10, len - 2).map(k => k.high));
-    const prevLow = Math.min(...klines.slice(len - 10, len - 2).map(k => k.low));
-
-    if (k2.high > prevHigh && k2.close < prevHigh) return { pattern: '假突破掠奪', type: '看空 (Bearish)', range: `掃高點: ${k2.high}` };
-    if (k2.low < prevLow && k2.close > prevLow) return { pattern: '假突破掠奪', type: '看多 (Bullish)', range: `掃低點: ${k2.low}` };
+    // 向上刺穿但收回（空單訊號）
+    if (current.high > prevHigh && current.close < prevHigh) {
+      return { type: 'Bearish', sweepPoint: current.high, entryPrice: current.close };
+    }
+    // 向下刺穿但收回（多單訊號）
+    if (current.low < prevLow && current.close > prevLow) {
+      return { type: 'Bullish', sweepPoint: current.low, entryPrice: current.close };
+    }
 
     return null;
   }
 
-  // 更新 UI 畫面
-  function renderTable() {
-    const tbody = document.getElementById('resultBody');
-    let html = '';
-    let foundCount = 0;
-
-    Object.keys(klineData).forEach(symbol => {
-      const klines = klineData[symbol];
-      const signal = analyzePattern(klines);
-
-      if (signal) {
-        foundCount++;
-        const currentPrice = klines[klines.length - 1].close;
-        const isBull = signal.type.includes('看多');
-        html += `
-          <tr>
-            <td><strong>${symbol}</strong></td>
-            <td>${currentPrice}</td>
-            <td>${signal.pattern}</td>
-            <td><span class="badge ${isBull ? 'badge-bull' : 'badge-bear'}">${signal.type}</span></td>
-            <td>${signal.range}</td>
-          </tr>
-        `;
-      }
-    });
-
-    tbody.innerHTML = foundCount > 0 ? html : '<tr><td colspan="5" style="text-align: center; color: #848e9c;">WebSocket 監控中，暫未發現符合 SMC 型態的訊號</td></tr>';
-  }
-
-  function startScan() {
-    const timeframe = document.getElementById('timeframe').value;
+  async function startScan() {
     const statusText = document.getElementById('statusText');
+    const tbody = document.getElementById('resultBody');
     const scanBtn = document.getElementById('scanBtn');
 
-    // 關閉舊連線
-    if (ws) ws.close();
-
     scanBtn.disabled = true;
-    statusText.innerText = '正在建立幣安 WebSocket 直連通道...';
+    statusText.innerText = '正在初始化數據連線...';
+    tbody.innerHTML = '';
 
-    // 構建幣安合約 WebSocket 多流訂閱網址 (無需代理)
-    const streams = TARGET_SYMBOLS.map(s => `${s.toLowerCase()}@kline_${timeframe}`).join('/');
-    const wsUrl = `wss://fstream.binance.com/stream?streams=${streams}`;
+    try {
+      const symbols = await getTopSymbols();
+      let foundCount = 0;
 
-    ws = new WebSocket(wsUrl);
+      for (let i = 0; i < symbols.length; i++) {
+        const symbol = symbols[i];
+        statusText.innerText = `正在分析雙時框型態 (${i + 1}/${symbols.length})：${symbol}...`;
 
-    ws.onopen = () => {
-      statusText.innerText = `⚡ 幣安 WebSocket 連線成功！正在即時串流監控 ${TARGET_SYMBOLS.length} 個主要永續合約幣種...`;
-      scanBtn.disabled = false;
-    };
+        try {
+          // 步驟 1：檢測 15 分鐘圖（大週期 Sweep）
+          const klines15m = await getKlines(symbol, '15m', 15);
+          const signal15m = checkSweep(klines15m);
 
-    ws.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
-      if (!msg.data) return;
+          if (signal15m) {
+            // 步驟 2：15m 條件觸發，切換檢測 1 分鐘圖（小週期 1m Sweep 精準確認）
+            await sleep(150); // 防限流短暫停頓
+            const klines1m = await getKlines(symbol, '1m', 15);
+            const signal1m = checkSweep(klines1m);
 
-      const k = msg.data.k;
-      const symbol = k.s;
-
-      if (!klineData[symbol]) klineData[symbol] = [];
-
-      // 構建與更新 K 線長度
-      const candle = { open: parseFloat(k.o), high: parseFloat(k.h), low: parseFloat(k.l), close: parseFloat(k.c) };
-      
-      if (klineData[symbol].length === 0) {
-        klineData[symbol] = Array(10).fill(candle); // 初始化緩衝區
-      } else {
-        klineData[symbol][klineData[symbol].length - 1] = candle;
-        if (k.x) { // 若該根 K 線收盤，推進下一根
-          klineData[symbol].push(candle);
-          if (klineData[symbol].length > 20) klineData[symbol].shift();
+            foundCount++;
+            const isBull = signal15m.type === 'Bullish';
+            const status1mText = signal1m ? '🔥 1m 同步出現掃蕩點（可即刻進場）' : '⏳ 1m 等待二次掃蕩訊號';
+            
+            const row = `
+              <tr>
+                <td><strong>${symbol}</strong></td>
+                <td><span class="badge ${isBull ? 'badge-bull' : 'badge-bear'}">${isBull ? '看多 (Long)' : '看空 (Short)'}</span></td>
+                <td>15m 區間 Sweep 已形成</td>
+                <td>${status1mText}</td>
+                <td class="price-tag">${signal1m ? signal1m.entryPrice : signal15m.entryPrice}</td>
+                <td class="price-tag" style="color: var(--accent-red);">${signal15m.sweepPoint}</td>
+              </tr>
+            `;
+            tbody.innerHTML += row;
+          }
+        } catch (e) {
+          console.warn(`${symbol} 獲取失敗`, e);
         }
+
+        await sleep(150); // 每批次停頓保護 API
       }
 
-      renderTable();
-    };
+      if (foundCount === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #848e9c;">當前前 15 大幣種未發現符合 15m/1m 雙框架掃蕩的標的</td></tr>';
+      }
+      statusText.innerText = `掃描完成！發現 ${foundCount} 個符合 15m 假突破的潛在標的。`;
 
-    ws.onerror = (err) => {
+    } catch (err) {
       console.error(err);
-      statusText.innerText = '❌ WebSocket 連線失敗，請檢查網路。';
+      statusText.innerText = '❌ 掃描失敗，請稍後重試。';
+    } finally {
       scanBtn.disabled = false;
-    };
-
-    ws.onclose = () => {
-      statusText.innerText = 'WebSocket 已斷開連線。';
-      scanBtn.disabled = false;
-    };
+    }
   }
 </script>
 
