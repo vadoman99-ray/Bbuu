@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>機構反向收割 - USDT 永續合約 WebSocket 即時掃描器</title>
+    <title>機構反向收割 - USDT 永續合約 SMC 全市場極速掃描器 (200+ 標的優化版)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
@@ -32,8 +32,12 @@
         select, input, button { background-color: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color); padding: 6px 12px; border-radius: 6px; font-size: 13px; outline: none; }
         button { cursor: pointer; background-color: #238636; color: #fff; font-weight: 500; border: none; }
         button:hover { background-color: #2ea043; }
+        button:disabled { background-color: #30363d; color: var(--text-secondary); cursor: not-allowed; }
 
-        .main-grid { display: grid; grid-template-columns: 380px 1fr; gap: 16px; }
+        .progress-bar-container { width: 100%; background-color: var(--bg-card); border-radius: 4px; height: 6px; overflow: hidden; margin-top: 4px; display: none; }
+        .progress-bar { height: 100%; background-color: var(--accent-blue); width: 0%; transition: width 0.1s ease; }
+
+        .main-grid { display: grid; grid-template-columns: 400px 1fr; gap: 16px; }
         @media (max-width: 960px) { .main-grid { grid-template-columns: 1fr; } }
 
         .panel { background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
@@ -59,14 +63,13 @@
         .metric-value { font-size: 15px; font-weight: 600; color: #fff; margin-top: 2px; }
 
         .risk-calculator { background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; align-items: center; }
-        
         .log-feed { font-family: monospace; font-size: 11px; background-color: #0d1117; padding: 10px; border-radius: 6px; height: 100px; overflow-y: auto; border: 1px solid var(--border-color); color: #a3b8cc; }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>🎯 機構反向收割 - USDT 永續合約 WebSocket 即時掃描器</h1>
+        <h1>🎯 機構反向收割 - USDT 永續合約 SMC 全市場極速掃描器</h1>
         <div class="status-badge" id="wsStatus">
             <span class="status-dot" id="wsDot"></span>
             <span id="wsText">Binance WS 連線中...</span>
@@ -77,26 +80,27 @@
         <div class="control-group">
             <label>戰法篩選：</label>
             <select id="strategyFilter" onchange="renderTable()">
-                <option value="ALL">全部 6 大戰法</option>
-                <option value="SFP">1. 假突破抓反轉 (SFP)</option>
-                <option value="HUNT">2. 關鍵位獵殺止損</option>
-                <option value="PIN_FAIL">3. Pinbar 失效戰法</option>
-                <option value="OB">4. 機構供需區 (OB)</option>
-                <option value="RETEST">5. 突破回踩戰法</option>
-                <option value="FVG">6. FVG 缺口回補</option>
+                <option value="ALL">全部 SMC 戰法</option>
+                <option value="SFP">1. SFP 假突破抓反轉</option>
+                <option value="FVG">2. FVG 缺口回補</option>
             </select>
         </div>
 
-        <button onclick="reconnectWebSocket()">🔄 重新連線 WS</button>
+        <button id="scanBtn" onclick="scanAllMarketSMC()">⚡ 全市場 200+ 標的一鍵極速掃描</button>
+        <button onclick="reconnectWebSocket()">🔄 重連 WS</button>
         <span id="lastUpdate" style="margin-left: auto; color: var(--text-secondary); font-size: 12px;">最後接收: --:--:--</span>
+        
+        <div class="progress-bar-container" id="progressContainer">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
     </div>
 
     <div class="main-grid">
         <!-- 左側：即時數據掃描清單 -->
         <div class="panel">
             <div class="panel-title">
-                <span>🔥 即時觸發訊號標的 (USDT-M)</span>
-                <span id="signalCount" style="color: var(--accent-yellow);">共 0 個</span>
+                <span>🔥 即時觸發訊號標的 (USDT-M 15m)</span>
+                <span id="signalCount" style="color: var(--accent-yellow);">未開始掃描</span>
             </div>
 
             <div class="table-container">
@@ -119,7 +123,7 @@
             <div class="metrics-banner">
                 <div class="metric-box">
                     <div class="metric-label">當前選擇標的</div>
-                    <div class="metric-value" id="currentSymbol">BTCUSDT</div>
+                    <div class="metric-value" id="currentSymbol">--</div>
                 </div>
                 <div class="metric-box">
                     <div class="metric-label">即時價格</div>
@@ -135,7 +139,7 @@
                 </div>
             </div>
 
-            <!-- USDT 倉位與槓桿風險計算器 -->
+            <!-- USDT 倉位與風險計算器 -->
             <div class="risk-calculator">
                 <div>
                     <label>本金(USDT)</label>
@@ -151,15 +155,15 @@
                 </div>
                 <div>
                     <span class="metric-label">最大虧損：</span>
-                    <div id="maxLossUsdt" style="color: var(--accent-red); font-weight: 600;">20.00</div>
+                    <div id="maxLossUsdt" style="color: var(--accent-red); font-weight: 600;">20.00 USDT</div>
                 </div>
                 <div>
                     <span class="metric-label">倉位名義價值：</span>
-                    <div id="suggestedPosition" style="color: var(--accent-green); font-weight: 600;">0.00</div>
+                    <div id="suggestedPosition" style="color: var(--accent-green); font-weight: 600;">0.00 USDT</div>
                 </div>
                 <div>
                     <span class="metric-label">預計保證金：</span>
-                    <div id="requiredMargin" style="color: var(--accent-blue); font-weight: 600;">0.00</div>
+                    <div id="requiredMargin" style="color: var(--accent-blue); font-weight: 600;">0.00 USDT</div>
                 </div>
             </div>
 
@@ -176,60 +180,158 @@
     </div>
 
     <script>
-        // 全局狀態管理
-        let marketDataMap = {}; // 存放即時全市場價格與策略
+        let marketDataMap = {};
         let currentItem = null;
         let chartInstance = null;
 
-        // WebSocket 實例控制
         let tickerWs = null;
         let klineWs = null;
-
-        const STRATEGIES = [
-            { code: "SFP", name: "假突破抓反轉", tf: "15m" },
-            { code: "HUNT", name: "獵殺止損戰法", tf: "1h" },
-            { code: "PIN_FAIL", name: "Pinbar 失效戰法", tf: "15m" },
-            { code: "OB", name: "機構供需區 (OB)", tf: "1h" },
-            { code: "RETEST", name: "突破回踩戰法", tf: "5m" },
-            { code: "FVG", name: "FVG 缺口回補", tf: "15m" }
-        ];
+        let isScanning = false;
+        let renderPending = false;
 
         window.onload = function() {
             initChart();
-            initMarketDataMap();
             connectTickerWebSocket();
+            // 頁面載入時自動觸發全市場掃描
+            scanAllMarketSMC();
         };
 
-        // 預先建立核心 USDT-M 標的結構
-        function initMarketDataMap() {
-            const topSymbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "XRPUSDT", "BNBUSDT", "ADAUSDT", "AVAXUSDT", "SUIUSDT", "NEARUSDT"];
-            topSymbols.forEach(symbol => {
-                const strat = STRATEGIES[Math.floor(Math.random() * STRATEGIES.length)];
-                const isBull = Math.random() > 0.5;
-                marketDataMap[symbol] = {
-                    symbol: symbol,
-                    price: 0,
-                    strategyCode: strat.code,
-                    strategyName: strat.name,
-                    timeframe: strat.tf,
-                    direction: isBull ? "LONG" : "SHORT",
-                    entry: 0,
-                    stopLoss: 0
-                };
-            });
+        // 1. 動態取得 Binance 所有交易中的 USDT 永續合約清單
+        async function fetchAllUsdtSymbols() {
+            try {
+                const res = await fetch("https://fapi.binance.com/fapi/v1/exchangeInfo");
+                const data = await res.json();
+                
+                return data.symbols
+                    .filter(s => s.quoteAsset === "USDT" && s.contractType === "PERPETUAL" && s.status === "TRADING")
+                    .map(s => s.symbol);
+            } catch (err) {
+                logEvent(`❌ 獲取市場交易對失敗: ${err.message}`);
+                return [];
+            }
         }
 
-        // 1. 連線全市場 Ticker WebSocket (即時價格更新)
+        // 2. 核心效能優化：分批併發與控制速率（Batch Concurrent Fetching）
+        async function scanAllMarketSMC() {
+            if (isScanning) return;
+            isScanning = true;
+
+            const scanBtn = document.getElementById("scanBtn");
+            const progressContainer = document.getElementById("progressContainer");
+            const progressBar = document.getElementById("progressBar");
+
+            scanBtn.disabled = true;
+            progressContainer.style.display = "block";
+            progressBar.style.width = "0%";
+            marketDataMap = {}; 
+            renderTable();
+
+            logEvent("🌐 開始向幣安獲取全市場 USDT 永續合約標的清單...");
+            const symbols = await fetchAllUsdtSymbols();
+            logEvent(`✅ 成功獲取 ${symbols.length} 個交易對！開始執行分批併發 SMC 演算法分析...`);
+
+            const BATCH_SIZE = 12; // 每批併發請求 12 個，完全避開 API 429 限制
+            let completed = 0;
+
+            for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
+                const chunk = symbols.slice(i, i + BATCH_SIZE);
+                
+                await Promise.all(chunk.map(async (symbol) => {
+                    try {
+                        // 只抓最近 35 根 K 線（減少網絡 Fetch 體積）
+                        const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=15m&limit=35`);
+                        if (!res.ok) return;
+                        
+                        const rawKlines = await res.json();
+                        const klines = rawKlines.map(k => ({
+                            high: parseFloat(k[2]),
+                            low: parseFloat(k[3]),
+                            close: parseFloat(k[4])
+                        }));
+
+                        const smcResult = detectSMC(klines);
+                        if (smcResult) {
+                            const latestPrice = klines[klines.length - 1].close;
+                            marketDataMap[symbol] = {
+                                symbol: symbol,
+                                price: latestPrice,
+                                strategyCode: smcResult.code,
+                                strategyName: smcResult.name,
+                                timeframe: "15m",
+                                direction: smcResult.direction,
+                                entry: latestPrice,
+                                stopLoss: smcResult.stopLoss
+                            };
+                        }
+                    } catch (e) {
+                        // 忽視單個失敗交易對
+                    } finally {
+                        completed++;
+                    }
+                }));
+
+                // 更新進度條與介面
+                const pct = Math.floor((completed / symbols.length) * 100);
+                progressBar.style.width = `${pct}%`;
+                requestTableRender(); // 防抖批次渲染，維護高 FPS
+
+                // 每批間隔 80ms 延遲，防止 IP 流量突發
+                await new Promise(r => setTimeout(r, 80));
+            }
+
+            isScanning = false;
+            scanBtn.disabled = false;
+            progressContainer.style.display = "none";
+            logEvent(`🎉 全市場掃描完成！共有 ${Object.keys(marketDataMap).length} 個標的符合 SMC 戰法。`);
+            
+            renderTable();
+        }
+
+        // 3. SMC 策略判定演算法 (SFP & FVG)
+        function detectSMC(klines) {
+            const len = klines.length;
+            if (len < 10) return null;
+
+            const curr = klines[len - 1];
+            const prevSlice = klines.slice(len - 25, len - 2);
+
+            const highestHigh = Math.max(...prevSlice.map(k => k.high));
+            const lowestLow = Math.min(...prevSlice.map(k => k.low));
+
+            // SFP 假突破 (看跌)
+            if (curr.high > highestHigh && curr.close < highestHigh) {
+                return { code: "SFP", name: "SFP 假突破 (獵殺多頭)", direction: "SHORT", stopLoss: parseFloat((curr.high * 1.0015).toFixed(4)) };
+            }
+
+            // SFP 假突破 (看漲)
+            if (curr.low < lowestLow && curr.close > lowestLow) {
+                return { code: "SFP", name: "SFP 假突破 (獵殺空頭)", direction: "LONG", stopLoss: parseFloat((curr.low * 0.9985).toFixed(4)) };
+            }
+
+            // FVG 缺口 (近三根 K 線)
+            const k1 = klines[len - 3];
+            const k3 = klines[len - 1];
+
+            if (k1.high < k3.low) {
+                return { code: "FVG", name: "FVG 看漲缺口", direction: "LONG", stopLoss: parseFloat((k1.high * 0.998).toFixed(4)) };
+            }
+            if (k1.low > k3.high) {
+                return { code: "FVG", name: "FVG 看跌缺口", direction: "SHORT", stopLoss: parseFloat((k1.low * 1.002).toFixed(4)) };
+            }
+
+            return null;
+        }
+
+        // WebSocket 全市場價格實時更新
         function connectTickerWebSocket() {
             if (tickerWs) tickerWs.close();
 
-            // Binance USDT-M Futures WebSocket 網址
             const wsUrl = "wss://fstream.binance.com/ws/!ticker@arr";
             tickerWs = new WebSocket(wsUrl);
 
             tickerWs.onopen = () => {
-                updateWsStatus(true, "Binance 永續合約 WS 連線成功");
-                logEvent("🟢 全市場 Ticker WebSocket 已建立連線");
+                updateWsStatus(true, "Binance 永續合約 WS 已連線");
+                logEvent("🟢 全市場 WebSocket Ticker 訂閱中...");
             };
 
             tickerWs.onmessage = (event) => {
@@ -242,16 +344,9 @@
                         const price = parseFloat(parseFloat(data.c).toFixed(4));
                         marketDataMap[symbol].price = price;
                         marketDataMap[symbol].entry = price;
-                        
-                        // 動態計算止損 (多頭 -0.7%, 空頭 +0.7%)
-                        const isBull = marketDataMap[symbol].direction === "LONG";
-                        marketDataMap[symbol].stopLoss = isBull 
-                            ? parseFloat((price * 0.993).toFixed(4)) 
-                            : parseFloat((price * 1.007).toFixed(4));
 
                         updated = true;
 
-                        // 若當前選中的標的價格更新，即時更新 UI 指標
                         if (currentItem && currentItem.symbol === symbol) {
                             document.getElementById("currentPrice").innerText = `$${price} USDT`;
                             document.getElementById("currentTradePlan").innerText = `進: ${price} | 損: ${marketDataMap[symbol].stopLoss}`;
@@ -261,23 +356,18 @@
                 });
 
                 if (updated) {
-                    renderTable();
+                    requestTableRender();
                     updateHeaderTime();
                 }
             };
 
-            tickerWs.onerror = (err) => {
-                updateWsStatus(false, "WS 連線發生錯誤");
-                logEvent("🔴 Ticker WebSocket 錯誤");
-            };
-
+            tickerWs.onerror = () => updateWsStatus(false, "WS 錯誤");
             tickerWs.onclose = () => {
-                updateWsStatus(false, "WS 已斷開，嘗試重連...");
+                updateWsStatus(false, "WS 已斷開，重連中...");
                 setTimeout(connectTickerWebSocket, 5000);
             };
         }
 
-        // 2. 切換標的並訂閱專屬 15m K 線 WebSocket
         function selectSymbol(item) {
             currentItem = item;
             document.getElementById("currentSymbol").innerText = item.symbol;
@@ -287,19 +377,16 @@
 
             renderTable();
             calcRisk();
-            logEvent(`🎯 切換標的 ${item.symbol} - 載入 15m K 線串流...`);
+            logEvent(`🎯 切換標的 ${item.symbol} - 載入 K 線中...`);
 
-            // 先載入 REST API 歷史 15m K線，確保圖表立即有資料
-            fetchHistoricalKlines(item.symbol);
-
-            // 訂閱該幣種的 15m K線 WebSocket
-            connectKlineWebSocket(item.symbol);
+            fetchHistoricalKlines(item.symbol).then(() => {
+                connectKlineWebSocket(item.symbol);
+            });
         }
 
-        // 抓取 Binance REST API 歷史 15m K線數據
         function fetchHistoricalKlines(symbol) {
             const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=15m&limit=30`;
-            fetch(url)
+            return fetch(url)
                 .then(res => res.json())
                 .then(data => {
                     const closePrices = data.map(k => parseFloat(k[4]));
@@ -316,7 +403,6 @@
                 .catch(err => logEvent(`⚠️ 歷史 K 線抓取失敗: ${err.message}`));
         }
 
-        // 連線 15m K線 WebSocket
         function connectKlineWebSocket(symbol) {
             if (klineWs) klineWs.close();
 
@@ -326,18 +412,25 @@
             klineWs.onmessage = (event) => {
                 const msg = JSON.parse(event.data);
                 if (msg.e === "kline") {
-                    const k = msg.k;
-                    const closePrice = parseFloat(k.c);
-
-                    // 更新圖表最新一根 K 線的價格
+                    const closePrice = parseFloat(msg.k.c);
                     const dataLen = chartInstance.data.datasets[0].data.length;
                     if (dataLen > 0) {
                         chartInstance.data.datasets[0].data[dataLen - 1] = closePrice;
                         chartInstance.data.datasets[1].data = Array(dataLen).fill(currentItem.stopLoss);
-                        chartInstance.update('none'); // 高效無動畫更新
+                        chartInstance.update('none');
                     }
                 }
             };
+        }
+
+        // 使用 requestAnimationFrame 批次防抖渲染，維護高 FPS 避免卡頓
+        function requestTableRender() {
+            if (renderPending) return;
+            renderPending = true;
+            requestAnimationFrame(() => {
+                renderTable();
+                renderPending = false;
+            });
         }
 
         function renderTable() {
@@ -346,7 +439,9 @@
             tbody.innerHTML = "";
 
             let count = 0;
-            Object.values(marketDataMap).forEach(item => {
+            const items = Object.values(marketDataMap);
+
+            items.forEach(item => {
                 if (filter !== "ALL" && item.strategyCode !== filter) return;
                 count++;
 
@@ -360,15 +455,18 @@
                 tr.innerHTML = `
                     <td style="font-weight:600; color:#fff;">${item.symbol}</td>
                     <td>$${item.price} USDT</td>
-                    <td><span class="tag tag-strategy">${item.strategyName}</span></td>
+                    <td><span class="tag tag-strategy">${item.strategyCode}</span></td>
                     <td><span class="tag ${dirClass}">${dirText}</span></td>
                 `;
                 tbody.appendChild(tr);
             });
 
-            document.getElementById("signalCount").innerText = `共 ${count} 個訊號`;
-            if (Object.keys(marketDataMap).length > 0 && !currentItem) {
-                selectSymbol(Object.values(marketDataMap)[0]);
+            document.getElementById("signalCount").innerText = isScanning 
+                ? `掃描中... 已發現 ${count} 個` 
+                : `共 ${count} 個訊號`;
+
+            if (items.length > 0 && !currentItem) {
+                selectSymbol(items[0]);
             }
         }
 
@@ -391,12 +489,7 @@
                 
                 const marginElem = document.getElementById("requiredMargin");
                 marginElem.innerText = `$${marginRequired.toFixed(2)}`;
-
-                if (marginRequired > balance) {
-                    marginElem.style.color = "var(--accent-red)";
-                } else {
-                    marginElem.style.color = "var(--accent-blue)";
-                }
+                marginElem.style.color = marginRequired > balance ? "var(--accent-red)" : "var(--accent-blue)";
             }
         }
 
@@ -414,7 +507,7 @@
         }
 
         function reconnectWebSocket() {
-            logEvent("🔄 手動觸發重連 WebSocket...");
+            logEvent("🔄 重連 WebSocket...");
             connectTickerWebSocket();
             if (currentItem) connectKlineWebSocket(currentItem.symbol);
         }
@@ -438,7 +531,7 @@
                     labels: [],
                     datasets: [
                         { label: '即時 K 線收盤價 (USDT)', data: [], borderColor: '#58a6ff', borderWidth: 2, tension: 0.1 },
-                        { label: '動態止損位', data: [], borderColor: '#da3633', borderWidth: 1.5, borderDash: [4, 4] }
+                        { label: 'SMC 建議動態止損位', data: [], borderColor: '#da3633', borderWidth: 1.5, borderDash: [4, 4] }
                     ]
                 },
                 options: {
