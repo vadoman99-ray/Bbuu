@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>機構反向收割 - USDT 永續合約 SMC 全市場極速掃描器 (200+ 標的優化版)</title>
+    <title>機構反向收割 - USDT 永續合約 SMC 全市場掃描器 (TG 推播版)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
@@ -27,12 +27,17 @@
         .status-badge { background-color: rgba(46, 160, 67, 0.15); color: var(--accent-green); padding: 4px 10px; border-radius: 12px; font-size: 12px; border: 1px solid rgba(46, 160, 67, 0.4); display: flex; align-items: center; gap: 6px; }
         .status-dot { width: 8px; height: 8px; border-radius: 50%; background-color: var(--accent-green); display: inline-block; }
 
+        .tg-panel { display: flex; flex-wrap: wrap; gap: 10px; background-color: rgba(88, 166, 255, 0.08); padding: 10px 16px; border-radius: 8px; border: 1px solid rgba(88, 166, 255, 0.3); margin-bottom: 16px; align-items: center; }
+        .tg-panel label { font-size: 12px; color: var(--accent-blue); font-weight: 600; }
+
         .controls { display: flex; flex-wrap: wrap; gap: 12px; background-color: var(--bg-secondary); padding: 12px 16px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 16px; align-items: center; }
         .control-group { display: flex; align-items: center; gap: 8px; }
         select, input, button { background-color: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color); padding: 6px 12px; border-radius: 6px; font-size: 13px; outline: none; }
         button { cursor: pointer; background-color: #238636; color: #fff; font-weight: 500; border: none; }
         button:hover { background-color: #2ea043; }
         button:disabled { background-color: #30363d; color: var(--text-secondary); cursor: not-allowed; }
+        .btn-tg { background-color: #1f6feb; }
+        .btn-tg:hover { background-color: #388bfd; }
 
         .progress-bar-container { width: 100%; background-color: var(--bg-card); border-radius: 4px; height: 6px; overflow: hidden; margin-top: 4px; display: none; }
         .progress-bar { height: 100%; background-color: var(--accent-blue); width: 0%; transition: width 0.1s ease; }
@@ -69,12 +74,21 @@
 <body>
 
     <header>
-        <h1>🎯 機構反向收割 - USDT 永續合約 SMC 全市場極速掃描器</h1>
+        <h1>🎯 機構反向收割 - USDT 永續合約 SMC 全市場掃描器 (TG 推播版)</h1>
         <div class="status-badge" id="wsStatus">
             <span class="status-dot" id="wsDot"></span>
             <span id="wsText">Binance WS 連線中...</span>
         </div>
     </header>
+
+    <!-- Telegram Bot 警報推播設定區 -->
+    <div class="tg-panel">
+        <label>🤖 Telegram 即時推播設定：</label>
+        <input type="password" id="tgBotToken" placeholder="Bot Token (如: 123456:ABC...)" style="width: 240px;" onchange="saveTgSettings()">
+        <input type="text" id="tgChatId" placeholder="Chat ID (如: -1001234567)" style="width: 180px;" onchange="saveTgSettings()">
+        <button class="btn-tg" onclick="testTelegramNotification()">✈️ 測試發送通知</button>
+        <span style="font-size: 11px; color: var(--text-secondary); margin-left: auto;">*自動儲存於瀏覽器</span>
+    </div>
 
     <div class="controls">
         <div class="control-group">
@@ -188,20 +202,79 @@
         let klineWs = null;
         let isScanning = false;
         let renderPending = false;
+        
+        // Telegram 已推播訊號快取 (防止重複發送)
+        let notifiedSignals = new Set();
 
         window.onload = function() {
             initChart();
+            loadTgSettings();
             connectTickerWebSocket();
-            // 頁面載入時自動觸發全市場掃描
             scanAllMarketSMC();
         };
 
-        // 1. 動態取得 Binance 所有交易中的 USDT 永續合約清單
+        // Telegram 設定管理
+        function loadTgSettings() {
+            document.getElementById("tgBotToken").value = localStorage.getItem("SMC_TG_BOT_TOKEN") || "";
+            document.getElementById("tgChatId").value = localStorage.getItem("SMC_TG_CHAT_ID") || "";
+        }
+
+        function saveTgSettings() {
+            const token = document.getElementById("tgBotToken").value.trim();
+            const chatId = document.getElementById("tgChatId").value.trim();
+            localStorage.setItem("SMC_TG_BOT_TOKEN", token);
+            localStorage.setItem("SMC_TG_CHAT_ID", chatId);
+        }
+
+        // 發送 Telegram 訊息核心函式
+        async function sendTelegramMessage(text) {
+            const token = document.getElementById("tgBotToken").value.trim();
+            const chatId = document.getElementById("tgChatId").value.trim();
+
+            if (!token || !chatId) {
+                logEvent("⚠️ 未設定 Telegram Bot Token 或 Chat ID，跳過 TG 推播。");
+                return false;
+            }
+
+            const url = `https://api.telegram.org/bot${token}/sendMessage`;
+            try {
+                const res = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        chat_id: chatId,
+                        text: text,
+                        parse_mode: "HTML"
+                    })
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    logEvent("✈️ Telegram 訊號警報推播成功！");
+                    return true;
+                } else {
+                    logEvent(`❌ Telegram 發送失敗: ${data.description}`);
+                    return false;
+                }
+            } catch (err) {
+                logEvent(`❌ Telegram API 請求失敗: ${err.message}`);
+                return false;
+            }
+        }
+
+        // 測試發送 Telegram 按鈕
+        async function testTelegramNotification() {
+            saveTgSettings();
+            const msg = `<b>🚨 SMC 機構掃描器 - Telegram 連線測試</b>\n\n🟢 您的 Telegram Bot Webhook 設定成功！即時訊號推播功能已就緒。`;
+            const ok = await sendTelegramMessage(msg);
+            if (ok) alert("✅ 測試訊息發送成功！請查看您的 Telegram。");
+            else alert("❌ 發送失敗，請確認 Token 與 Chat ID 是否正確。");
+        }
+
+        // 動態獲取幣安標的
         async function fetchAllUsdtSymbols() {
             try {
                 const res = await fetch("https://fapi.binance.com/fapi/v1/exchangeInfo");
                 const data = await res.json();
-                
                 return data.symbols
                     .filter(s => s.quoteAsset === "USDT" && s.contractType === "PERPETUAL" && s.status === "TRADING")
                     .map(s => s.symbol);
@@ -211,7 +284,7 @@
             }
         }
 
-        // 2. 核心效能優化：分批併發與控制速率（Batch Concurrent Fetching）
+        // 全市場 SMC 掃描
         async function scanAllMarketSMC() {
             if (isScanning) return;
             isScanning = true;
@@ -228,9 +301,9 @@
 
             logEvent("🌐 開始向幣安獲取全市場 USDT 永續合約標的清單...");
             const symbols = await fetchAllUsdtSymbols();
-            logEvent(`✅ 成功獲取 ${symbols.length} 個交易對！開始執行分批併發 SMC 演算法分析...`);
+            logEvent(`✅ 成功獲取 ${symbols.length} 個交易對！開始執行 SMC 戰法分析與 TG 警報比對...`);
 
-            const BATCH_SIZE = 12; // 每批併發請求 12 個，完全避開 API 429 限制
+            const BATCH_SIZE = 12;
             let completed = 0;
 
             for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
@@ -238,7 +311,6 @@
                 
                 await Promise.all(chunk.map(async (symbol) => {
                     try {
-                        // 只抓最近 35 根 K 線（減少網絡 Fetch 體積）
                         const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=15m&limit=35`);
                         if (!res.ok) return;
                         
@@ -262,20 +334,20 @@
                                 entry: latestPrice,
                                 stopLoss: smcResult.stopLoss
                             };
+
+                            // 自動判斷並發送 Telegram 警報（加鎖防洗版）
+                            checkAndSendTgAlert(symbol, smcResult, latestPrice);
                         }
                     } catch (e) {
-                        // 忽視單個失敗交易對
                     } finally {
                         completed++;
                     }
                 }));
 
-                // 更新進度條與介面
                 const pct = Math.floor((completed / symbols.length) * 100);
                 progressBar.style.width = `${pct}%`;
-                requestTableRender(); // 防抖批次渲染，維護高 FPS
+                requestTableRender();
 
-                // 每批間隔 80ms 延遲，防止 IP 流量突發
                 await new Promise(r => setTimeout(r, 80));
             }
 
@@ -287,7 +359,33 @@
             renderTable();
         }
 
-        // 3. SMC 策略判定演算法 (SFP & FVG)
+        // 檢查並發送 Telegram 警報（含冷卻過濾）
+        function checkAndSendTgAlert(symbol, smc, price) {
+            const signalKey = `${symbol}_${smc.code}_${smc.direction}`;
+            if (notifiedSignals.has(signalKey)) return; // 避免重複發送
+
+            notifiedSignals.add(signalKey); // 記錄已發送
+
+            const dirEmoji = smc.direction === "LONG" ? "🟢 做多 (LONG)" : "🔴 做空 (SHORT)";
+            const stopLossPct = (Math.abs(price - smc.stopLoss) / price * 100).toFixed(2);
+
+            const tgMessage = 
+`🎯 <b>【SMC 機構戰法觸發通知】</b>
+
+📌 <b>標的幣種</b>：<code>${symbol}</code>
+⚡ <b>觸發戰法</b>：<b>${smc.name}</b>
+📈 <b>操作方向</b>：${dirEmoji}
+💵 <b>當前價格</b>：<code>$${price} USDT</code>
+🛡️ <b>動態止損</b>：<code>$${smc.stopLoss} USDT</code> (預估風險: ${stopLossPct}%)
+⏱️ <b>K線週期</b>：15m
+⏰ <b>觸發時間</b>：${new Date().toTimeString().split(' ')[0]}
+
+<i>💡 請根據風控計算器妥善安排倉位保證金。</i>`;
+
+            sendTelegramMessage(tgMessage);
+        }
+
+        // SMC 策略判定演算法
         function detectSMC(klines) {
             const len = klines.length;
             if (len < 10) return null;
@@ -322,7 +420,6 @@
             return null;
         }
 
-        // WebSocket 全市場價格實時更新
         function connectTickerWebSocket() {
             if (tickerWs) tickerWs.close();
 
@@ -423,7 +520,6 @@
             };
         }
 
-        // 使用 requestAnimationFrame 批次防抖渲染，維護高 FPS 避免卡頓
         function requestTableRender() {
             if (renderPending) return;
             renderPending = true;
