@@ -222,7 +222,7 @@ canvas { display: block; width: 100%; height: 100%; }
   const API_BASE = 'https://fapi.binance.com'; 
   const P0 = 5, P1 = 30, P2 = 45, P3 = 60; 
   const MIN_VOLUME = 100000000;
-  const KLINE_SHOW_COUNT = 100;
+  const KLINE_SHOW_COUNT = 80; // 已修改為 80 根 K 棒
   const CONCURRENCY_LIMIT = 12;
 
   let rawResults = []; 
@@ -230,7 +230,7 @@ canvas { display: block; width: 100%; height: 100%; }
   let isScanning = false;
   let countdownSec = 60;
   let timerInterval = null;
-  let currentIndex = -1; // 當前查看的標的索引
+  let currentIndex = -1;
 
   const dom = {
     scanBtn: document.getElementById('scanBtn'),
@@ -253,7 +253,6 @@ canvas { display: block; width: 100%; height: 100%; }
 
   const ctx = dom.canvas.getContext('2d');
 
-  // 本地儲存 TG Token 與 Chat ID
   window.saveConfig = () => {
     localStorage.setItem('TG_BOT_TOKEN', dom.tgToken.value.trim());
     localStorage.setItem('TG_CHAT_ID', dom.tgChatId.value.trim());
@@ -264,7 +263,6 @@ canvas { display: block; width: 100%; height: 100%; }
     dom.tgChatId.value = localStorage.getItem('TG_CHAT_ID') || '';
   }
 
-  // Telegram 通知傳送功能
   async function sendTelegramNotification(results) {
     const token = dom.tgToken.value.trim();
     const chatId = dom.tgChatId.value.trim();
@@ -396,7 +394,6 @@ canvas { display: block; width: 100%; height: 100%; }
     dom.scanBtn.innerText = "啟動極速掃描"; 
     renderList(); 
 
-    // 發送 Telegram 推播通知
     sendTelegramNotification(rawResults);
 
     isScanning = false;
@@ -441,7 +438,6 @@ canvas { display: block; width: 100%; height: 100%; }
     dom.symbolList.replaceChildren(fragment); 
   } 
 
-  // 定時器邏輯（60 秒計時）
   function resetCountdown() {
     countdownSec = 60;
     dom.timerCount.innerText = `(${countdownSec}s)`;
@@ -666,7 +662,6 @@ canvas { display: block; width: 100%; height: 100%; }
     }
   }
 
-  // 滑動觸控切換標的邏輯
   let touchStartX = 0;
   let touchStartY = 0;
 
@@ -681,12 +676,11 @@ canvas { display: block; width: 100%; height: 100%; }
     const diffX = touchEndX - touchStartX;
     const diffY = touchEndY - touchStartY;
 
-    // 確保主要是水平滑動且滑動距離足夠（至少 40px）
     if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 40) {
       if (diffX < 0) {
-        nextSymbol(); // 向左滑動，看下一個標的
+        nextSymbol();
       } else {
-        prevSymbol(); // 向右滑動，看上一個標的
+        prevSymbol();
       }
     }
   }, { passive: true });
@@ -716,7 +710,6 @@ canvas { display: block; width: 100%; height: 100%; }
     }
   });
 
-  // 初始化
   loadConfig();
   startTimer();
   startScan();
