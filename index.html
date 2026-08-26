@@ -3,7 +3,7 @@
 <head> 
 <meta charset="UTF-8"> 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"> 
-<title>⚡ 1H MA 多頭排列全排行 (>1億USDT)</title> 
+<title>⚡ 1H 多頭拉回+RSI二次確認 (>1億USDT)</title> 
 <style> 
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;800&family=Noto+Sans+TC:wght@700;900&family=JetBrains+Mono:wght@700;800;900&display=swap'); 
 :root { 
@@ -44,7 +44,6 @@ body.modal-open { overflow: hidden; position: fixed; width: 100%; height: 100%; 
 
 .header-controls { display: flex; align-items: center; gap: 10px; }
 
-/* Telegram 與自動掃描設定面板 */
 .config-panel {
   display: flex; flex-wrap: wrap; gap: 8px; background: rgba(0, 240, 255, 0.05);
   border: 1px solid var(--border-color); padding: 8px 12px; border-radius: 8px; font-size: 0.8rem;
@@ -90,6 +89,7 @@ body.modal-open { overflow: hidden; position: fixed; width: 100%; height: 100%; 
 
 .badge-rank { font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: 800; background: rgba(255, 255, 255, 0.1); color: #fff; } 
 .badge-bull { font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: 800; background: rgba(0, 255, 102, 0.15); color: var(--manga-green); border: 1px solid var(--manga-green); }
+.badge-rsi { font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: 800; background: rgba(255, 0, 127, 0.15); color: var(--manga-pink); border: 1px solid var(--manga-pink); }
 .val-up { color: var(--manga-green); } 
 .val-down { color: var(--manga-red); } 
 
@@ -137,7 +137,6 @@ body.modal-open { overflow: hidden; position: fixed; width: 100%; height: 100%; 
 .chart-container { flex: 1; width: 100%; height: 100%; position: relative; background: #060911; overflow: hidden; }
 canvas { display: block; width: 100%; height: 100%; }
 
-/* 滑動提示標籤 */
 .swipe-hint {
   position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
   font-size: 0.65rem; color: rgba(255, 255, 255, 0.35); pointer-events: none;
@@ -157,13 +156,12 @@ canvas { display: block; width: 100%; height: 100%; }
 
 <div class="app-header"> 
   <div class="header-top"> 
-    <div class="header-title">⚡ 1H MA 多頭排列全排行 (>1億USDT)</div> 
+    <div class="header-title">⚡ 1H 多頭拉回+RSI確認反彈 (>1億USDT)</div> 
     <div class="header-controls">
       <button id="scanBtn" class="scan-btn">啟動極速掃描</button> 
     </div>
   </div> 
 
-  <!-- Telegram 設定與每 60 秒自動掃描控制面板 -->
   <div class="config-panel">
     <div class="config-inputs">
       <input type="password" id="tgToken" placeholder="TG Bot Token" onchange="saveConfig()">
@@ -185,7 +183,7 @@ canvas { display: block; width: 100%; height: 100%; }
   </div> 
   <div class="stat-card entry"> 
     <div class="val" id="statEntry">0</div> 
-    <div style="font-size:0.75rem; color:#64748b; margin-top:2px;">符合 1H 多頭排列標的</div> 
+    <div style="font-size:0.75rem; color:#64748b; margin-top:2px;">符合拉回紅棒轉折標的</div> 
   </div> 
 </div> 
 
@@ -222,7 +220,7 @@ canvas { display: block; width: 100%; height: 100%; }
   const API_BASE = 'https://fapi.binance.com'; 
   const P0 = 5, P1 = 30, P2 = 45, P3 = 60; 
   const MIN_VOLUME = 100000000;
-  const KLINE_SHOW_COUNT = 80; // 已修改為 80 根 K 棒
+  const KLINE_SHOW_COUNT = 80;
   const CONCURRENCY_LIMIT = 12;
 
   let rawResults = []; 
@@ -268,7 +266,7 @@ canvas { display: block; width: 100%; height: 100%; }
     const chatId = dom.tgChatId.value.trim();
     if (!token || !chatId) return;
 
-    let message = `⚡ <b>1H MA 多頭排列全排行 (>1億USDT)</b>\n`;
+    let message = `⚡ <b>1H 多頭拉回+RSI確認反彈</b>\n`;
     message += `符合條件標的總數：<b>${results.length}</b> 個\n\n`;
 
     if (results.length === 0) {
@@ -279,6 +277,7 @@ canvas { display: block; width: 100%; height: 100%; }
         const chgSign = item.priceChange24h >= 0 ? '+' : '';
         message += `<b>#${index + 1} ${item.symbol.replace('USDT', '')}</b>\n`;
         message += `• 價格：<code>${item.price}</code> USDT\n`;
+        message += `• 5RSI / 20RSI：<b>${item.rsi5.toFixed(1)} / ${item.rsi20.toFixed(1)}</b>\n`;
         message += `• 距 60MA：<b>+${item.ma3DistPercent.toFixed(2)}%</b>\n`;
         message += `• 24H 漲跌：${chgSign}${item.priceChange24h.toFixed(2)}%\n\n`;
       });
@@ -313,28 +312,97 @@ canvas { display: block; width: 100%; height: 100%; }
     return ma; 
   } 
 
+  // 標準 RSI (Wilder's Smoothing) 計算函數
+  function calculateRSI(closes, period) {
+    if (closes.length <= period) return new Array(closes.length).fill(null);
+    const rsi = new Array(closes.length).fill(null);
+    let gains = 0, losses = 0;
+
+    for (let i = 1; i <= period; i++) {
+      const diff = closes[i] - closes[i - 1];
+      if (diff >= 0) gains += diff;
+      else losses -= diff;
+    }
+
+    let avgGain = gains / period;
+    let avgLoss = losses / period;
+
+    if (avgLoss === 0) rsi[period] = 100;
+    else {
+      const rs = avgGain / avgLoss;
+      rsi[period] = 100 - (100 / (1 + rs));
+    }
+
+    for (let i = period + 1; i < closes.length; i++) {
+      const diff = closes[i] - closes[i - 1];
+      const gain = diff >= 0 ? diff : 0;
+      const loss = diff < 0 ? -diff : 0;
+
+      avgGain = (avgGain * (period - 1) + gain) / period;
+      avgLoss = (avgLoss * (period - 1) + loss) / period;
+
+      if (avgLoss === 0) rsi[i] = 100;
+      else {
+        const rs = avgGain / avgLoss;
+        rsi[i] = 100 - (100 / (1 + rs));
+      }
+    }
+    return rsi;
+  }
+
   async function fetchSymbolDetailsData(symbol, signal) { 
     try {
-      const res = await fetch(`${API_BASE}/fapi/v1/klines?symbol=${symbol}&interval=1h&limit=${P3 + 1}`, { signal }); 
+      // 確保獲取足夠多的 K 棒以完成 20RSI 與 60MA 計算
+      const fetchLimit = Math.max(P3 + 1, 100);
+      const res = await fetch(`${API_BASE}/fapi/v1/klines?symbol=${symbol}&interval=1h&limit=${fetchLimit}`, { signal }); 
       if (!res.ok) return null; 
       const klinesRaw = await res.json(); 
       const totalLen = klinesRaw.length; 
       if (totalLen < P3) return null; 
 
       const closes = klinesRaw.map(k => parseFloat(k[4])); 
-      const price = closes[totalLen - 1]; 
+      const opens = klinesRaw.map(k => parseFloat(k[1]));
+      const lows = klinesRaw.map(k => parseFloat(k[3]));
 
-      const ma1 = calculateSMA(closes, P1)[totalLen - 1]; 
-      const ma2 = calculateSMA(closes, P2)[totalLen - 1]; 
-      const ma3 = calculateSMA(closes, P3)[totalLen - 1]; 
+      const currClose = closes[totalLen - 1]; 
+      const currOpen = opens[totalLen - 1];
+      const currLow = lows[totalLen - 1];
 
-      if (!(ma1 > ma2 && ma2 > ma3 && price >= ma3)) return null; 
+      // 1. 計算均線
+      const ma5Arr = calculateSMA(closes, P0);
+      const ma30Arr = calculateSMA(closes, P1);
+      const ma45Arr = calculateSMA(closes, P2);
+      const ma60Arr = calculateSMA(closes, P3);
 
-      const ma3DistPercent = ((price - ma3) / ma3) * 100; 
+      const ma5 = ma5Arr[totalLen - 1];
+      const ma1 = ma30Arr[totalLen - 1]; 
+      const ma2 = ma45Arr[totalLen - 1]; 
+      const ma3 = ma60Arr[totalLen - 1]; 
+
+      // 條條件 1：1H 多頭排列 (5MA > 30MA > 45MA > 60MA 且 價格 > 60MA)
+      if (!(ma5 > ma1 && ma1 > ma2 && ma2 > ma3 && currClose >= ma3)) return null; 
+
+      // 條件 2：K 棒拉回至 5MA 下（當前 K 棒的最低價或收盤價下穿 5MA）
+      if (!(currLow < ma5 || currClose < ma5)) return null;
+
+      // 條件 3：紅棒形成 (收盤價 > 開盤價，代表轉折買盤進入)
+      if (currClose <= currOpen) return null;
+
+      // 條件 4：RSI 指標判定 (5RSI < 50 且 20RSI > 50)
+      const rsi5Arr = calculateRSI(closes, 5);
+      const rsi20Arr = calculateRSI(closes, 20);
+
+      const rsi5 = rsi5Arr[totalLen - 1];
+      const rsi20 = rsi20Arr[totalLen - 1];
+
+      if (rsi5 === null || rsi20 === null) return null;
+      if (!(rsi5 < 50 && rsi20 > 50)) return null;
+
+      const ma3DistPercent = ((currClose - ma3) / ma3) * 100; 
       const ticker = tickerMap.get(symbol);
       const priceChange24h = ticker ? parseFloat(ticker.priceChangePercent) : 0; 
 
-      return { symbol, price, ma3DistPercent, priceChange24h }; 
+      return { symbol, price: currClose, ma3DistPercent, priceChange24h, rsi5, rsi20 }; 
     } catch {
       return null;
     }
@@ -402,7 +470,7 @@ canvas { display: block; width: 100%; height: 100%; }
 
   function renderList() { 
     if (rawResults.length === 0) { 
-      dom.symbolList.innerHTML = `<div style="text-align:center; padding:40px; color:#64748b; font-weight:800;">目前無符合條件之標的</div>`; 
+      dom.symbolList.innerHTML = `<div style="text-align:center; padding:40px; color:#64748b; font-weight:800;">目前無符合「多頭拉回反彈」之標的</div>`; 
       return; 
     } 
     const fragment = document.createDocumentFragment(); 
@@ -419,7 +487,8 @@ canvas { display: block; width: 100%; height: 100%; }
           <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;"> 
             <span class="badge-rank">#${index + 1}</span> 
             <span class="symbol-name">${item.symbol.replace('USDT','')}</span> 
-            <span class="badge-bull">🚀 1H 多頭排列</span> 
+            <span class="badge-bull">🎯 拉回紅棒</span> 
+            <span class="badge-rsi">RSI: ${item.rsi5.toFixed(1)} / ${item.rsi20.toFixed(1)}</span>
           </div> 
           <div class="detail-row"> 
             距慢線 (60MA): <span class="val-up">+${item.ma3DistPercent.toFixed(2)}%</span> 
