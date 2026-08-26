@@ -2,117 +2,736 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>Binance 多週期即時 K 線圖展出</title>
-    <!-- 引入 TradingView 開源 Lightweight Charts 圖表庫 -->
-    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>SMC 掃描器 - 同步多頭突破 20K 高點版</title>
+
+    <!-- 🌐 預先建立 API 與 CDN 連線 -->
+    <link rel="preconnect" href="https://fapi.binance.com" crossorigin>
+    <link rel="dns-prefetch" href="https://fapi.binance.com">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+
+    <!-- 🌐 Defer 載入 Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background-color: #121212; color: #ffffff; font-family: sans-serif; padding: 10px; }
-        h1 { text-align: center; margin-bottom: 10px; font-size: 20px; color: #f0b90b; }
-        .grid-container {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            grid-template-rows: 1fr 1fr;
-            gap: 10px;
-            height: calc(100vh - 50px);
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-card: #21262d;
+            --border-color: #30363d;
+            --text-primary: #c9d1d9;
+            --text-secondary: #8b949e;
+            --accent-green: #2ea043;
+            --accent-red: #da3633;
+            --accent-blue: #58a6ff;
+            --accent-yellow: #d29922;
+            --accent-purple: #bc8cff;
         }
-        .chart-card {
-            background-color: #1e1e1e;
-            border-radius: 6px;
-            padding: 8px;
-            display: flex;
+
+        * { 
+            box-sizing: border-box; 
+            margin: 0; 
+            padding: 0; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body { 
+            background-color: var(--bg-primary); 
+            color: var(--text-primary); 
+            padding: 12px; 
+            padding-top: calc(12px + env(safe-area-inset-top));
+            padding-bottom: calc(20px + env(safe-area-inset-bottom));
+            font-size: 14px; 
+            min-height: 100vh;
+        }
+        
+        header { 
+            display: flex; 
             flex-direction: column;
-            border: 1px solid #2a2e39;
+            gap: 6px;
+            padding-bottom: 12px; 
+            border-bottom: 1px solid var(--border-color); 
+            margin-bottom: 12px; 
         }
-        .chart-title { font-weight: bold; font-size: 14px; margin-bottom: 6px; color: #d1d4dc; }
-        .chart-body { flex: 1; width: 100%; height: 100%; }
+        .header-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        header h1 { font-size: 16px; font-weight: 700; color: #fff; }
+        .status-badge { 
+            background-color: rgba(88, 166, 255, 0.15); 
+            color: var(--accent-blue); 
+            padding: 3px 8px; 
+            border-radius: 12px; 
+            font-size: 11px; 
+            border: 1px solid rgba(88, 166, 255, 0.4); 
+            display: inline-flex; 
+            align-items: center; 
+            gap: 4px; 
+            width: fit-content;
+        }
+        .status-dot { width: 6px; height: 6px; border-radius: 50%; background-color: var(--accent-blue); }
+
+        .tg-panel { 
+            display: flex; 
+            flex-direction: column;
+            gap: 8px; 
+            background-color: rgba(88, 166, 255, 0.08); 
+            padding: 10px; 
+            border-radius: 8px; 
+            border: 1px solid rgba(88, 166, 255, 0.3); 
+            margin-bottom: 12px; 
+        }
+        .tg-panel label { font-size: 12px; color: var(--accent-blue); font-weight: 600; }
+        .tg-inputs { display: flex; gap: 6px; }
+
+        .controls { 
+            display: flex; 
+            flex-direction: column;
+            gap: 10px; 
+            background-color: var(--bg-secondary); 
+            padding: 12px; 
+            border-radius: 8px; 
+            border: 1px solid var(--border-color); 
+            margin-bottom: 12px; 
+        }
+        .control-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+        
+        select, input, button { 
+            background-color: var(--bg-card); 
+            color: var(--text-primary); 
+            border: 1px solid var(--border-color); 
+            padding: 8px 10px; 
+            border-radius: 6px; 
+            font-size: 13px; 
+            outline: none; 
+            width: 100%;
+        }
+        button { 
+            cursor: pointer; 
+            background-color: #238636; 
+            color: #fff; 
+            font-weight: 600; 
+            border: none; 
+            text-align: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        button:active { opacity: 0.8; }
+        button:disabled { background-color: #30363d; color: var(--text-secondary); }
+        .btn-tg { background-color: #1f6feb; white-space: nowrap; width: auto; }
+
+        .progress-bar-container { width: 100%; background-color: var(--bg-card); border-radius: 4px; height: 4px; overflow: hidden; display: none; }
+        .progress-bar { height: 100%; background-color: var(--accent-blue); width: 0%; transition: width 0.1s ease; }
+
+        .tab-container { display: flex; gap: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 8px; }
+        .tab-btn { 
+            flex: 1;
+            background-color: transparent; 
+            border: 1px solid var(--border-color); 
+            color: var(--text-secondary); 
+            padding: 8px 4px; 
+            border-radius: 6px; 
+            font-weight: 600; 
+            font-size: 12px; 
+            display: flex; 
+            justify-content: center;
+            align-items: center; 
+            gap: 4px; 
+        }
+        .tab-btn.active-long { background-color: rgba(46, 160, 67, 0.2); color: var(--accent-green); border-color: var(--accent-green); }
+
+        .panel { background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+
+        .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        table { width: 100%; min-width: 340px; border-collapse: collapse; font-size: 12px; text-align: left; }
+        th { color: var(--text-secondary); padding: 8px 6px; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
+        td { padding: 10px 6px; border-bottom: 1px solid rgba(48, 54, 61, 0.5); white-space: nowrap; }
+
+        tr { cursor: pointer; }
+        tr:hover { background-color: rgba(255, 255, 255, 0.03); }
+
+        .tag { padding: 2px 4px; border-radius: 4px; font-size: 10px; font-weight: 600; display: inline-block; }
+        .tag-bull { background-color: rgba(46, 160, 67, 0.2); color: var(--accent-green); }
+        .tag-strategy { background-color: rgba(188, 140, 255, 0.15); color: var(--accent-purple); border: 1px solid rgba(188, 140, 255, 0.3); }
+
+        .log-feed { font-family: monospace; font-size: 10px; background-color: #0d1117; padding: 8px; border-radius: 6px; height: 80px; overflow-y: auto; border: 1px solid var(--border-color); color: #a3b8cc; margin-top: 12px; }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            width: 100vw; height: 100vh;
+            background: rgba(0, 0, 0, 0.85);
+            display: none; justify-content: center; align-items: flex-end;
+            z-index: 9999; backdrop-filter: blur(4px);
+        }
+        .modal-content {
+            background-color: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+            border-radius: 16px 16px 0 0; 
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto; 
+            -webkit-overflow-scrolling: touch;
+            padding: 16px; 
+            padding-bottom: calc(16px + env(safe-area-inset-bottom));
+            display: flex; 
+            flex-direction: column; 
+            gap: 12px;
+            box-shadow: 0 -4px 24px rgba(0,0,0,0.8);
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
+        .modal-close { font-size: 20px; cursor: pointer; color: var(--text-secondary); padding: 4px 8px; }
+        .modal-grid { display: flex; flex-direction: column; gap: 12px; }
+        .calc-form { background-color: var(--bg-card); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 8px; }
+        .form-group { display: flex; flex-direction: column; gap: 2px; }
+        .form-group label { font-size: 11px; color: var(--text-secondary); }
+        .form-group input { font-size: 13px; padding: 6px; }
+        
+        .calc-results { 
+            background-color: #0d1117; 
+            border: 1px solid var(--border-color); 
+            border-radius: 8px; 
+            padding: 10px; 
+            display: grid; 
+            grid-template-columns: repeat(2, 1fr); 
+            gap: 10px; 
+        }
+        .result-item { display: flex; flex-direction: column; }
+        .result-label { font-size: 11px; color: var(--text-secondary); }
+        .result-value { font-size: 13px; font-weight: 600; margin-top: 2px; }
+        .chart-box { height: 220px; position: relative; background-color: var(--bg-card); border-radius: 8px; padding: 8px; border: 1px solid var(--border-color); }
     </style>
 </head>
 <body>
 
-    <h1>ETHUSDT 多週期即時 K 線圖面板</h1>
+    <header>
+        <div class="header-title">
+            <h1>🚀 突破掃描器 (同步多頭 + 過20K高點)</h1>
+            <div class="status-badge">
+                <span class="status-dot"></span>
+                <span>REST API 快取模式</span>
+            </div>
+        </div>
+    </header>
 
-    <div class="grid-container">
-        <div class="chart-card">
-            <div class="chart-title">日線 (1D)</div>
-            <div id="chart-1d" class="chart-body"></div>
+    <div class="tg-panel">
+        <label>🤖 Telegram 即時推播設定</label>
+        <div class="tg-inputs">
+            <input type="password" id="tgBotToken" placeholder="Bot Token" onchange="saveTgSettings()">
+            <input type="text" id="tgChatId" placeholder="Chat ID" onchange="saveTgSettings()">
+            <button class="btn-tg" onclick="testTelegramNotification()">測試</button>
         </div>
-        <div class="chart-card">
-            <div class="chart-title">4小時線 (4H)</div>
-            <div id="chart-4h" class="chart-body"></div>
+    </div>
+
+    <div class="controls">
+        <div class="control-row">
+            <select id="strategyFilter" onchange="renderTable()">
+                <option value="ALL">全部標的</option>
+                <option value="BREAKOUT_20K">多頭突破 20K 高點</option>
+            </select>
         </div>
-        <div class="chart-card">
-            <div class="chart-title">1小時線 (1H)</div>
-            <div id="chart-1h" class="chart-body"></div>
+
+        <button id="scanBtn" onclick="scanAllMarketSMC()">⚡ 掃描 ≥1 億 成交額標的 (同步多頭突破)</button>
+        
+        <div class="control-row">
+            <span id="lastUpdate" style="color: var(--text-secondary); font-size: 11px;">最後更新: --:--:--</span>
         </div>
-        <div class="chart-card">
-            <div class="chart-title">15分鐘線 (15M)</div>
-            <div id="chart-15m" class="chart-body"></div>
+        
+        <div class="progress-bar-container" id="progressContainer">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="tab-container">
+            <button class="tab-btn active-long" id="tabLongBtn">
+                🟢 多頭突破排行 <span id="longCount">(0)</span>
+            </button>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>幣種</th>
+                        <th>24h 漲跌</th>
+                        <th>成交額</th>
+                        <th>戰法/訊號</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="scannerTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="log-feed" id="logFeed"></div>
+
+    <!-- 📊 行動端試算 Modal 彈窗 -->
+    <div class="modal-overlay" id="tradeModal" onclick="handleOverlayClick(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 id="modalTitle" style="color: #fff; font-size: 14px;">🎯 交易計畫試算</h3>
+                <span class="modal-close" onclick="closeModal()">✕</span>
+            </div>
+
+            <div class="modal-grid">
+                <div class="calc-form">
+                    <div class="form-group">
+                        <label>單筆承受虧損 (USDT)</label>
+                        <input type="number" id="inputLossUsdt" value="20" oninput="calculateTradePlan()">
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <div class="form-group" style="flex:1;">
+                            <label>槓桿倍數 (x)</label>
+                            <input type="number" id="inputLeverage" value="10" min="1" max="125" oninput="calculateTradePlan()">
+                        </div>
+                        <div class="form-group" style="flex:1;">
+                            <label>風報比 R:R (1:X)</label>
+                            <input type="number" id="inputRR" value="2" step="0.1" min="0.5" oninput="calculateTradePlan()">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="calc-results">
+                    <div class="result-item">
+                        <span class="result-label">建議進場點</span>
+                        <span class="result-value" id="resEntry" style="color: var(--accent-blue);">0.00</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">使用槓桿</span>
+                        <span class="result-value" id="resLeverage" style="color: var(--accent-purple);">10x</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">下單投入本金 (保證金)</span>
+                        <span class="result-value" id="resMargin" style="color: #fff;">0.00 USDT</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">總買入金額 (名義價值)</span>
+                        <span class="result-value" id="resPositionSize" style="color: var(--accent-yellow);">0.00 USDT</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">止損價 (SL)</span>
+                        <span class="result-value" id="resStopLoss" style="color: var(--accent-red);">0.00</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">預計止損金額</span>
+                        <span class="result-value" id="resStopLossAmount" style="color: var(--accent-red);">-0.00 USDT</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">止盈價 (TP)</span>
+                        <span class="result-value" id="resTakeProfit" style="color: var(--accent-green);">0.00</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">預計止盈金額</span>
+                        <span class="result-value" id="resTakeProfitAmount" style="color: var(--accent-green);">+0.00 USDT</span>
+                    </div>
+                </div>
+
+                <div class="chart-box">
+                    <canvas id="modalChart"></canvas>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
-        const symbol = 'ETHUSDT';
-        const configs = [
-            { containerId: 'chart-1d', interval: '1d', limit: 100 },
-            { containerId: 'chart-4h', interval: '4h', limit: 100 },
-            { containerId: 'chart-1h', interval: '1h', limit: 100 },
-            { containerId: 'chart-15m', interval: '15m', limit: 100 }
-        ];
+        let marketDataMap = {};
+        let currentModalItem = null;
+        let modalChartInstance = null;
+        let isScanning = false;
+        let pollingTimer = null;
+        let notifiedSignals = new Set();
 
-        async function fetchKlines(interval, limit) {
-            const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
-            const response = await fetch(url);
-            const data = await response.json();
-            return data.map(d => ({
-                time: d[0] / 1000, // 轉為 Unix 秒級時間戳
-                open: parseFloat(d[1]),
-                high: parseFloat(d[2]),
-                low: parseFloat(d[3]),
-                close: parseFloat(d[4])
-            }));
+        const MIN_VOLUME_USDT = 100000000;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initModalChart();
+            loadTgSettings();
+            scanAllMarketSMC();
+            startPollingLatestPrices();
+        });
+
+        function loadTgSettings() {
+            document.getElementById("tgBotToken").value = localStorage.getItem("SMC_TG_BOT_TOKEN") || "";
+            document.getElementById("tgChatId").value = localStorage.getItem("SMC_TG_CHAT_ID") || "";
         }
 
-        async function initCharts() {
-            for (const cfg of configs) {
-                const container = document.getElementById(cfg.containerId);
-                
-                // 建立 TradingView 圖表實例
-                const chart = LightweightCharts.createChart(container, {
-                    layout: { backgroundColor: '#1e1e1e', textColor: '#d1d4dc' },
-                    grid: { vertLines: { color: '#2b2b43' }, horzLines: { color: '#2b2b43' } },
-                    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-                    timeScale: { timeVisible: true, secondsVisible: false }
+        function saveTgSettings() {
+            localStorage.setItem("SMC_TG_BOT_TOKEN", document.getElementById("tgBotToken").value.trim());
+            localStorage.setItem("SMC_TG_CHAT_ID", document.getElementById("tgChatId").value.trim());
+        }
+
+        async function sendTelegramMessage(text) {
+            const token = document.getElementById("tgBotToken").value.trim();
+            const chatId = document.getElementById("tgChatId").value.trim();
+            if (!token || !chatId) return false;
+
+            try {
+                const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ chat_id: chatId, text: text, parse_mode: "HTML" })
                 });
-
-                // 新增 Candlestick 系列
-                const candlestickSeries = chart.addCandlestickSeries({
-                    upColor: '#ef5350',
-                    downColor: '#26a69a',
-                    borderVisible: false,
-                    wickUpColor: '#ef5350',
-                    wickDownColor: '#26a69a'
-                });
-
-                // 載入 Binance 歷史 K 線數據
-                const candleData = await fetchKlines(cfg.interval, cfg.limit);
-                candlestickSeries.setData(candleData);
-
-                // 自動縮放與響應式調整
-                chart.timeScale().fitContent();
-                new ResizeObserver(() => {
-                    chart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
-                }).observe(container);
-
-                // 設定每 10 秒向 Binance 抓取最新 K 線刷新
-                setInterval(async () => {
-                    const latestData = await fetchKlines(cfg.interval, 2);
-                    latestData.forEach(candle => candlestickSeries.update(candle));
-                }, 10000);
+                const data = await res.json();
+                return data.ok;
+            } catch (err) {
+                return false;
             }
         }
 
-        initCharts();
+        async function testTelegramNotification() {
+            saveTgSettings();
+            const ok = await sendTelegramMessage(`<b>🚨 多頭突破掃描器 - 連線測試</b>\n\n🟢 測試成功！`);
+            alert(ok ? "✅ 發送成功！" : "❌ 發送失敗，請檢查 Token 與 Chat ID。");
+        }
+
+        async function fetchHighVolumeSymbols() {
+            try {
+                const res = await fetch("https://fapi.binance.com/fapi/v1/ticker/24hr");
+                const data = await res.json();
+                
+                return data
+                    .filter(item => item.symbol.endsWith("USDT") && parseFloat(item.quoteVolume) >= MIN_VOLUME_USDT)
+                    .map(item => ({
+                        symbol: item.symbol,
+                        priceChangePercent: parseFloat(item.priceChangePercent),
+                        quoteVolume: parseFloat(item.quoteVolume)
+                    }));
+            } catch (err) {
+                return [];
+            }
+        }
+
+        async function scanAllMarketSMC() {
+            if (isScanning) return;
+            isScanning = true;
+
+            const scanBtn = document.getElementById("scanBtn");
+            const progressContainer = document.getElementById("progressContainer");
+            const progressBar = document.getElementById("progressBar");
+
+            scanBtn.disabled = true;
+            progressContainer.style.display = "block";
+            progressBar.style.width = "0%";
+            marketDataMap = {}; 
+            renderTable();
+
+            logEvent("🌐 篩選 24h 成交額 ≥ 1 億 USDT 標的...");
+            const targetSymbols = await fetchHighVolumeSymbols();
+            logEvent(`⚡ 符合標的共 ${targetSymbols.length} 個，開始多頭突破掃描...`);
+
+            const BATCH_SIZE = 15;
+            let completed = 0;
+
+            for (let i = 0; i < targetSymbols.length; i += BATCH_SIZE) {
+                const chunk = targetSymbols.slice(i, i + BATCH_SIZE);
+                await Promise.all(chunk.map(async (target) => {
+                    const symbol = target.symbol;
+                    try {
+                        const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1h&limit=75`);
+                        if (!res.ok) return;
+                        const rawKlines = await res.json();
+                        
+                        const parsedKlines = rawKlines.map(k => ({
+                            time: k[0],
+                            high: parseFloat(k[2]),
+                            low: parseFloat(k[3]),
+                            close: parseFloat(k[4]),
+                            volume: parseFloat(k[5])
+                        }));
+
+                        const smcResult = detectSMC(parsedKlines);
+                        if (smcResult) {
+                            const latestPrice = parsedKlines[parsedKlines.length - 1].close;
+                            marketDataMap[symbol] = {
+                                symbol: symbol,
+                                price: latestPrice,
+                                priceChangePercent: target.priceChangePercent,
+                                volumeUsdt: target.quoteVolume,
+                                strategyCode: smcResult.code,
+                                strategyName: smcResult.name,
+                                timeframe: "1h",
+                                direction: smcResult.direction,
+                                entry: latestPrice,
+                                stopLoss: smcResult.stopLoss,
+                                cachedKlines: parsedKlines
+                            };
+                            checkAndSendTgAlert(symbol, smcResult, latestPrice);
+                        }
+                    } catch (e) {
+                    } finally {
+                        completed++;
+                    }
+                }));
+
+                progressBar.style.width = `${Math.floor((completed / targetSymbols.length) * 100)}%`;
+                renderTable();
+                await new Promise(r => setTimeout(r, 20));
+            }
+
+            isScanning = false;
+            scanBtn.disabled = false;
+            progressContainer.style.display = "none";
+            logEvent(`🎉 掃描完成！獲得 ${Object.keys(marketDataMap).length} 個多頭突破 20K 高點標的。`);
+            renderTable();
+            updateHeaderTime();
+        }
+
+        function startPollingLatestPrices() {
+            if (pollingTimer) clearInterval(pollingTimer);
+            pollingTimer = setInterval(async () => {
+                if (Object.keys(marketDataMap).length === 0 || isScanning) return;
+                try {
+                    const res = await fetch("https://fapi.binance.com/fapi/v1/ticker/24hr");
+                    if (!res.ok) return;
+                    const allTickers = await res.json();
+                    
+                    allTickers.forEach(t => {
+                        if (marketDataMap[t.symbol]) {
+                            marketDataMap[t.symbol].price = parseFloat(t.lastPrice);
+                            marketDataMap[t.symbol].priceChangePercent = parseFloat(t.priceChangePercent);
+                            marketDataMap[t.symbol].volumeUsdt = parseFloat(t.quoteVolume);
+                        }
+                    });
+
+                    renderTable();
+                    updateHeaderTime();
+                } catch (e) {}
+            }, 5000);
+        }
+
+        function checkAndSendTgAlert(symbol, smc, price) {
+            const signalKey = `${symbol}_${smc.code}_${smc.direction}`;
+            if (notifiedSignals.has(signalKey)) return; 
+            notifiedSignals.add(signalKey); 
+
+            const stopLossPct = (Math.abs(price - smc.stopLoss) / price * 100).toFixed(2);
+
+            const tgMessage = 
+`🚀 <b>【多頭突破 20K 高點訊號觸發】</b>
+
+📌 <b>標的</b>：<code>${symbol}</code>
+⚡ <b>戰法</b>：<b>${smc.name}</b>
+📈 <b>方向</b>：🟢 做多 (突破前 20 根 K 棒最高點)
+💵 <b>現價</b>：<code>$${price} USDT</code>
+🛡️ <b>止損</b>：<code>$${smc.stopLoss} USDT</code> (${stopLossPct}%)`;
+
+            sendTelegramMessage(tgMessage);
+        }
+
+        function calculateSMA(dataArray, period) {
+            if (dataArray.length < period) return null;
+            const slice = dataArray.slice(-period);
+            const sum = slice.reduce((acc, val) => acc + val, 0);
+            return sum / period;
+        }
+
+        function detectSMC(klines) {
+            const len = klines.length;
+            if (len < 60) return null;
+
+            const closePrices = klines.map(k => k.close);
+            const volumes = klines.map(k => k.volume);
+
+            const ma30 = calculateSMA(closePrices, 30);
+            const ma45 = calculateSMA(closePrices, 45);
+            const ma60 = calculateSMA(closePrices, 60);
+
+            const vm5 = calculateSMA(volumes, 5);
+            const vm20 = calculateSMA(volumes, 20);
+
+            if (!ma30 || !ma45 || !ma60 || !vm5 || !vm20) return null;
+
+            const curr = klines[len - 1];
+
+            const isBullTrend = (ma30 > ma45) && (ma45 > ma60) && (vm5 > vm20);
+
+            if (!isBullTrend) return null;
+
+            const past20Klines = klines.slice(len - 21, len - 1);
+            const maxHigh20 = Math.max(...past20Klines.map(k => k.high));
+
+            if (curr.close > maxHigh20) {
+                const stopLossVal = Math.min(maxHigh20 * 0.995, ma30 * 0.995);
+                return { 
+                    code: "BREAKOUT_20K", 
+                    name: "同步多頭+過20K高點", 
+                    direction: "LONG", 
+                    stopLoss: parseFloat(stopLossVal.toFixed(4)) 
+                };
+            }
+
+            return null;
+        }
+
+        function renderTable() {
+            const filter = document.getElementById("strategyFilter").value;
+            const tbody = document.getElementById("scannerTableBody");
+            const fragment = document.createDocumentFragment();
+
+            const allItems = Object.values(marketDataMap);
+            document.getElementById("longCount").innerText = `(${allItems.length})`;
+
+            allItems.sort((a, b) => b.priceChangePercent - a.priceChangePercent);
+
+            allItems.forEach(item => {
+                if (filter !== "ALL" && item.strategyCode !== filter) return;
+
+                const tr = document.createElement("tr");
+                tr.onclick = () => openTradeModal(item);
+
+                const changeColor = item.priceChangePercent >= 0 ? "var(--accent-green)" : "var(--accent-red)";
+                const changeSign = item.priceChangePercent >= 0 ? "+" : "";
+                const volIn100M = (item.volumeUsdt / 100000000).toFixed(1);
+
+                tr.innerHTML = `
+                    <td style="font-weight:600; color:#fff;">${item.symbol.replace('USDT','')}</td>
+                    <td style="color:${changeColor}; font-weight:600;">${changeSign}${item.priceChangePercent.toFixed(2)}%</td>
+                    <td style="color:var(--accent-yellow);">${volIn100M}億</td>
+                    <td><span class="tag tag-strategy">${item.strategyName}</span></td>
+                    <td><button style="padding: 4px 8px; font-size: 11px;" onclick="event.stopPropagation(); openTradeModal(marketDataMap['${item.symbol}']);">📊 試算</button></td>
+                `;
+                fragment.appendChild(tr);
+            });
+
+            tbody.innerHTML = "";
+            tbody.appendChild(fragment);
+        }
+
+        function openTradeModal(item) {
+            if (!item) return;
+            currentModalItem = item;
+            document.getElementById("modalTitle").innerHTML = `🎯 ${item.symbol} <span class="tag tag-bull">LONG</span>`;
+            
+            const modal = document.getElementById("tradeModal");
+            modal.style.display = "flex";
+
+            if (item.cachedKlines && item.cachedKlines.length > 0) {
+                renderModalChartFromCache(item.cachedKlines);
+            } else {
+                loadModalChartData(item.symbol);
+            }
+        }
+
+        function closeModal() {
+            document.getElementById("tradeModal").style.display = "none";
+        }
+
+        function handleOverlayClick(e) {
+            if (e.target.classList.contains('modal-overlay')) closeModal();
+        }
+
+        function calculateTradePlan() {
+            if (!currentModalItem) return;
+
+            const entry = currentModalItem.price;
+            const sl = currentModalItem.stopLoss;
+
+            const lossUsdt = parseFloat(document.getElementById("inputLossUsdt").value) || 0;
+            const leverage = parseFloat(document.getElementById("inputLeverage").value) || 1;
+            const rr = parseFloat(document.getElementById("inputRR").value) || 1;
+
+            const priceRiskRatio = Math.abs(entry - sl) / entry;
+            let tp = entry + (entry - sl) * rr;
+            let positionSize = priceRiskRatio > 0 ? lossUsdt / priceRiskRatio : 0;
+            let margin = positionSize / leverage;
+            let profitUsdt = lossUsdt * rr;
+
+            document.getElementById("resEntry").innerText = `$${entry}`;
+            document.getElementById("resLeverage").innerText = `${leverage}x`;
+            document.getElementById("resMargin").innerText = `$${margin.toFixed(2)} USDT`;
+            document.getElementById("resPositionSize").innerText = `$${positionSize.toFixed(2)} USDT`;
+            
+            document.getElementById("resStopLoss").innerText = `$${sl}`;
+            document.getElementById("resStopLossAmount").innerText = `-$${lossUsdt.toFixed(2)} USDT`;
+            
+            document.getElementById("resTakeProfit").innerText = `$${tp.toFixed(4)}`;
+            document.getElementById("resTakeProfitAmount").innerText = `+$${profitUsdt.toFixed(2)} USDT`;
+
+            updateModalChartLines(entry, sl, tp);
+        }
+
+        function renderModalChartFromCache(klines) {
+            // 抓取最近 50 根 K 棒走勢圖，讓細節更清晰
+            const recentKlines = klines.slice(-50);
+            const closePrices = recentKlines.map(k => k.close);
+            const times = recentKlines.map(k => {
+                const date = new Date(k.time);
+                return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+            });
+
+            modalChartInstance.data.labels = times;
+            modalChartInstance.data.datasets[0].data = closePrices;
+            calculateTradePlan();
+        }
+
+        function loadModalChartData(symbol) {
+            fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1h&limit=50`)
+                .then(res => res.json())
+                .then(data => {
+                    const closePrices = data.map(k => parseFloat(k[4]));
+                    const times = data.map(k => {
+                        const date = new Date(k[0]);
+                        return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+                    });
+
+                    modalChartInstance.data.labels = times;
+                    modalChartInstance.data.datasets[0].data = closePrices;
+                    calculateTradePlan();
+                });
+        }
+
+        function updateModalChartLines(entry, sl, tp) {
+            if (!modalChartInstance || modalChartInstance.data.labels.length === 0) return;
+            const count = modalChartInstance.data.labels.length;
+
+            modalChartInstance.data.datasets[1].data = Array(count).fill(tp);
+            modalChartInstance.data.datasets[2].data = Array(count).fill(entry);
+            modalChartInstance.data.datasets[3].data = Array(count).fill(sl);
+            modalChartInstance.update();
+        }
+
+        function initModalChart() {
+            const ctx = document.getElementById('modalChart').getContext('2d');
+            modalChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        { label: '收盤價', data: [], borderColor: '#58a6ff', borderWidth: 2, tension: 0.1 },
+                        { label: 'TP', data: [], borderColor: '#2ea043', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0 },
+                        { label: 'Entry', data: [], borderColor: '#388bfd', borderWidth: 1.5, pointRadius: 0 },
+                        { label: 'SL', data: [], borderColor: '#da3633', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: '#30363d' }, ticks: { color: '#8b949e', font: { size: 9 } } },
+                        y: { grid: { color: '#30363d' }, ticks: { color: '#8b949e', font: { size: 9 } } }
+                    }
+                }
+            });
+        }
+
+        function updateHeaderTime() {
+            document.getElementById("lastUpdate").innerText = `最後更新: ${new Date().toTimeString().split(' ')[0]}`;
+        }
+
+        function logEvent(msg) {
+            const feed = document.getElementById("logFeed");
+            const div = document.createElement("div");
+            div.innerHTML = `<span style="color:var(--text-secondary)">[${new Date().toTimeString().split(' ')[0]}]</span> ${msg}`;
+            feed.prepend(div);
+        }
     </script>
 </body>
 </html>
