@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>SMC 掃描器 - 完整交易試算版</title>
+    <title>SMC 掃描器 - 1h 均線量能完整版</title>
 
-    <!-- 🌐 網路優化 1：預先建立 API 與 CDN 連線 (DNS Prefetch / Preconnect) -->
+    <!-- 🌐 預先建立 API 與 CDN 連線 -->
     <link rel="preconnect" href="https://fapi.binance.com" crossorigin>
     <link rel="dns-prefetch" href="https://fapi.binance.com">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 
-    <!-- 🌐 網路優化 2：Defer 載入 Chart.js 避免阻塞畫面渲染 -->
+    <!-- 🌐 Defer 載入 Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
 
     <style>
@@ -209,7 +209,7 @@
 
     <header>
         <div class="header-title">
-            <h1>🎯 SMC 掃描器</h1>
+            <h1>🎯 SMC 掃描器 (1h 均線量能版)</h1>
             <div class="status-badge">
                 <span class="status-dot"></span>
                 <span>REST API 快取模式</span>
@@ -229,13 +229,14 @@
     <div class="controls">
         <div class="control-row">
             <select id="strategyFilter" onchange="renderTable()">
-                <option value="ALL">全部 SMC 戰法</option>
-                <option value="SFP">1. SFP 假突破抓反轉</option>
-                <option value="FVG">2. FVG 缺口回補</option>
+                <option value="ALL">全部策略 / 趨勢篩選</option>
+                <option value="TREND">純 1h MA+VM 趨勢</option>
+                <option value="SFP">SFP 假突破抓反轉</option>
+                <option value="FVG">FVG 缺口回補</option>
             </select>
         </div>
 
-        <button id="scanBtn" onclick="scanAllMarketSMC()">⚡ 掃描 ≥1 億 成交額標的</button>
+        <button id="scanBtn" onclick="scanAllMarketSMC()">⚡ 掃描 ≥1 億 成交額標的 (1h 均線量能)</button>
         
         <div class="control-row">
             <span id="lastUpdate" style="color: var(--text-secondary); font-size: 11px;">最後更新: --:--:--</span>
@@ -263,7 +264,7 @@
                         <th>幣種</th>
                         <th>24h 漲跌</th>
                         <th>成交額</th>
-                        <th>戰法</th>
+                        <th>戰法/趨勢</th>
                         <th>操作</th>
                     </tr>
                 </thead>
@@ -442,9 +443,8 @@
 
             logEvent("🌐 篩選 24h 成交額 ≥ 1 億 USDT 標的...");
             const targetSymbols = await fetchHighVolumeSymbols();
-            logEvent(`⚡ 符合標的共 ${targetSymbols.length} 個，開始 SMC 掃描...`);
+            logEvent(`⚡ 符合標的共 ${targetSymbols.length} 個，開始 1h 均線量能掃描...`);
 
-            /* 🌐 網路優化 3：調大并发批次量，提升併發處理效率，加快掃描速度 */
             const BATCH_SIZE = 15;
             let completed = 0;
 
@@ -453,16 +453,17 @@
                 await Promise.all(chunk.map(async (target) => {
                     const symbol = target.symbol;
                     try {
-                        const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=15m&limit=35`);
+                        // 修改時區為 1h，limit 增加至 75 以提供 60MA 計算空間
+                        const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1h&limit=75`);
                         if (!res.ok) return;
                         const rawKlines = await res.json();
                         
-                        // 快取完整 K 線資料（包含時間戳記與收盤價），供彈窗繪圖使用
                         const parsedKlines = rawKlines.map(k => ({
                             time: k[0],
                             high: parseFloat(k[2]),
                             low: parseFloat(k[3]),
-                            close: parseFloat(k[4])
+                            close: parseFloat(k[4]),
+                            volume: parseFloat(k[5])
                         }));
 
                         const smcResult = detectSMC(parsedKlines);
@@ -475,11 +476,11 @@
                                 volumeUsdt: target.quoteVolume,
                                 strategyCode: smcResult.code,
                                 strategyName: smcResult.name,
-                                timeframe: "15m",
+                                timeframe: "1h",
                                 direction: smcResult.direction,
                                 entry: latestPrice,
                                 stopLoss: smcResult.stopLoss,
-                                cachedKlines: parsedKlines // 🌐 快取 K線，避免開啟彈窗時重複向網路請求
+                                cachedKlines: parsedKlines
                             };
                             checkAndSendTgAlert(symbol, smcResult, latestPrice);
                         }
@@ -497,7 +498,7 @@
             isScanning = false;
             scanBtn.disabled = false;
             progressContainer.style.display = "none";
-            logEvent(`🎉 掃描完成！獲得 ${Object.keys(marketDataMap).length} 個觸發標的。`);
+            logEvent(`🎉 掃描完成！獲得 ${Object.keys(marketDataMap).length} 個符合趨勢與戰法標的。`);
             renderTable();
             updateHeaderTime();
         }
@@ -534,7 +535,7 @@
             const stopLossPct = (Math.abs(price - smc.stopLoss) / price * 100).toFixed(2);
 
             const tgMessage = 
-`🎯 <b>【SMC 訊號觸發】</b>
+`🎯 <b>【1h 均線量能訊號觸發】</b>
 
 📌 <b>標的</b>：<code>${symbol}</code>
 ⚡ <b>戰法</b>：<b>${smc.name}</b>
@@ -545,32 +546,69 @@
             sendTelegramMessage(tgMessage);
         }
 
+        // 計算簡單移動平均 (SMA)
+        function calculateSMA(dataArray, period) {
+            if (dataArray.length < period) return null;
+            const slice = dataArray.slice(-period);
+            const sum = slice.reduce((acc, val) => acc + val, 0);
+            return sum / period;
+        }
+
+        // 核心判斷：1h 30/45/60 MA 排列 + 5VM/20VM 量能條件
         function detectSMC(klines) {
             const len = klines.length;
-            if (len < 10) return null;
+            if (len < 60) return null;
+
+            const closePrices = klines.map(k => k.close);
+            const volumes = klines.map(k => k.volume);
+
+            const ma30 = calculateSMA(closePrices, 30);
+            const ma45 = calculateSMA(closePrices, 45);
+            const ma60 = calculateSMA(closePrices, 60);
+
+            const vm5 = calculateSMA(volumes, 5);
+            const vm20 = calculateSMA(volumes, 20);
+
+            if (!ma30 || !ma45 || !ma60 || !vm5 || !vm20) return null;
 
             const curr = klines[len - 1];
-            const prevSlice = klines.slice(len - 25, len - 2);
 
+            // 🟢【多頭趨勢條件】：30MA > 45MA > 60MA 且 5VM > 20VM
+            const isBullTrend = (ma30 > ma45) && (ma45 > ma60);
+            const isVolVolumeUp = vm5 > vm20;
+
+            // 🔴【空頭趨勢條件】：30MA < 45MA < 60MA 且 5VM < 20VM
+            const isBearTrend = (ma30 < ma45) && (ma45 < ma60);
+            const isVolVolumeDown = vm5 < vm20;
+
+            const prevSlice = klines.slice(len - 25, len - 2);
             const highestHigh = Math.max(...prevSlice.map(k => k.high));
             const lowestLow = Math.min(...prevSlice.map(k => k.low));
 
-            if (curr.high > highestHigh && curr.close < highestHigh) {
-                return { code: "SFP", name: "SFP 假突破", direction: "SHORT", stopLoss: parseFloat((curr.high * 1.0015).toFixed(4)) };
+            // 多頭觸發邏輯
+            if (isBullTrend && isVolVolumeUp) {
+                if (curr.low < lowestLow && curr.close > lowestLow) {
+                    return { code: "SFP", name: "多頭+量增 SFP", direction: "LONG", stopLoss: parseFloat((curr.low * 0.9985).toFixed(4)) };
+                }
+                const k1 = klines[len - 3];
+                const k3 = klines[len - 1];
+                if (k1.high < k3.low) {
+                    return { code: "FVG", name: "多頭+量增 FVG", direction: "LONG", stopLoss: parseFloat((k1.high * 0.998).toFixed(4)) };
+                }
+                return { code: "TREND", name: "多頭排列 (5VM>20VM)", direction: "LONG", stopLoss: parseFloat((ma30 * 0.995).toFixed(4)) };
             }
 
-            if (curr.low < lowestLow && curr.close > lowestLow) {
-                return { code: "SFP", name: "SFP 假突破", direction: "LONG", stopLoss: parseFloat((curr.low * 0.9985).toFixed(4)) };
-            }
-
-            const k1 = klines[len - 3];
-            const k3 = klines[len - 1];
-
-            if (k1.high < k3.low) {
-                return { code: "FVG", name: "FVG 看漲缺口", direction: "LONG", stopLoss: parseFloat((k1.high * 0.998).toFixed(4)) };
-            }
-            if (k1.low > k3.high) {
-                return { code: "FVG", name: "FVG 看跌缺口", direction: "SHORT", stopLoss: parseFloat((k1.low * 1.002).toFixed(4)) };
+            // 空頭觸發邏輯
+            if (isBearTrend && isVolVolumeDown) {
+                if (curr.high > highestHigh && curr.close < highestHigh) {
+                    return { code: "SFP", name: "空頭+量縮 SFP", direction: "SHORT", stopLoss: parseFloat((curr.high * 1.0015).toFixed(4)) };
+                }
+                const k1 = klines[len - 3];
+                const k3 = klines[len - 1];
+                if (k1.low > k3.high) {
+                    return { code: "FVG", name: "空頭+量縮 FVG", direction: "SHORT", stopLoss: parseFloat((k1.low * 1.002).toFixed(4)) };
+                }
+                return { code: "TREND", name: "空頭排列 (5VM<20VM)", direction: "SHORT", stopLoss: parseFloat((ma30 * 1.005).toFixed(4)) };
             }
 
             return null;
@@ -580,7 +618,6 @@
             const filter = document.getElementById("strategyFilter").value;
             const tbody = document.getElementById("scannerTableBody");
             
-            /* 🌐 DOM 優化：使用 Fragment 降低瀏覽器 Reflow / Repaint 次數 */
             const fragment = document.createDocumentFragment();
 
             const allItems = Object.values(marketDataMap);
@@ -611,7 +648,7 @@
                     <td style="font-weight:600; color:#fff;">${item.symbol.replace('USDT','')}</td>
                     <td style="color:${changeColor}; font-weight:600;">${changeSign}${item.priceChangePercent.toFixed(2)}%</td>
                     <td style="color:var(--accent-yellow);">${volIn100M}億</td>
-                    <td><span class="tag tag-strategy">${item.strategyCode}</span></td>
+                    <td><span class="tag tag-strategy">${item.strategyName}</span></td>
                     <td><button style="padding: 4px 8px; font-size: 11px;">📊 試算</button></td>
                 `;
                 fragment.appendChild(tr);
@@ -628,7 +665,6 @@
             const modal = document.getElementById("tradeModal");
             modal.style.display = "flex";
 
-            /* 🌐 網路優化 4：若記憶體內已有 K 線快取，直接渲染圖表，不再發起 HTTP 請求 */
             if (item.cachedKlines && item.cachedKlines.length > 0) {
                 renderModalChartFromCache(item.cachedKlines);
             } else {
@@ -675,10 +711,9 @@
             updateModalChartLines(entry, sl, tp);
         }
 
-        // 🌐 從快取資料繪製圖表 (零網路延遲)
         function renderModalChartFromCache(klines) {
-            const closePrices = klines.slice(-25).map(k => k.close);
-            const times = klines.slice(-25).map(k => {
+            const closePrices = klines.slice(-30).map(k => k.close);
+            const times = klines.slice(-30).map(k => {
                 const date = new Date(k.time);
                 return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
             });
@@ -688,9 +723,8 @@
             calculateTradePlan();
         }
 
-        // 備用：無快取時的 HTTP 請求機制
         function loadModalChartData(symbol) {
-            fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=15m&limit=25`)
+            fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1h&limit=30`)
                 .then(res => res.json())
                 .then(data => {
                     const closePrices = data.map(k => parseFloat(k[4]));
