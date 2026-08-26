@@ -105,6 +105,7 @@ body.modal-open { overflow: hidden; position: fixed; width: 100%; height: 100%; 
   width: 100%; max-width: 1050px; height: 100%; max-height: 90vh; max-height: 90dvh; background: #0b0f19;
   border: 1px solid rgba(0, 240, 255, 0.35); border-radius: 16px; overflow: hidden;
   display: flex; flex-direction: column; box-shadow: 0 0 50px rgba(0, 240, 255, 0.2);
+  position: relative;
 }
 
 .chart-header {
@@ -135,6 +136,13 @@ body.modal-open { overflow: hidden; position: fixed; width: 100%; height: 100%; 
 
 .chart-container { flex: 1; width: 100%; height: 100%; position: relative; background: #060911; overflow: hidden; }
 canvas { display: block; width: 100%; height: 100%; }
+
+/* 滑動提示標籤 */
+.swipe-hint {
+  position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+  font-size: 0.65rem; color: rgba(255, 255, 255, 0.35); pointer-events: none;
+  font-family: 'Noto Sans TC', sans-serif; z-index: 10;
+}
 
 @media (max-width: 600px) {
   .chart-modal { padding: 0; }
@@ -205,6 +213,7 @@ canvas { display: block; width: 100%; height: 100%; }
     <div class="chart-container" id="canvasWrapper">
       <canvas id="klineCanvas"></canvas>
     </div>
+    <div class="swipe-hint">◀ 左右滑動或用方向鍵切換標的 ▶</div>
   </div>
 </div>
 
@@ -221,6 +230,7 @@ canvas { display: block; width: 100%; height: 100%; }
   let isScanning = false;
   let countdownSec = 60;
   let timerInterval = null;
+  let currentIndex = -1; // 當前查看的標的索引
 
   const dom = {
     scanBtn: document.getElementById('scanBtn'),
@@ -229,6 +239,7 @@ canvas { display: block; width: 100%; height: 100%; }
     statEntry: document.getElementById('statEntry'),
     symbolList: document.getElementById('symbolList'),
     chartModal: document.getElementById('chartModal'),
+    chartBox: document.getElementById('chartBox'),
     symbolTitle: document.getElementById('symbolTitle'),
     ma5Badge: document.getElementById('ma5Badge'),
     closeModalBtn: document.getElementById('closeModalBtn'),
@@ -401,7 +412,7 @@ canvas { display: block; width: 100%; height: 100%; }
     rawResults.forEach((item, index) => { 
       const card = document.createElement('div'); 
       card.className = 'symbol-card'; 
-      card.addEventListener('click', () => openChartModal(item.symbol)); 
+      card.addEventListener('click', () => openChartModal(index)); 
 
       const chg24Class = item.priceChange24h >= 0 ? 'val-up' : 'val-down'; 
       const chg24Sign = item.priceChange24h >= 0 ? '+' : ''; 
@@ -458,7 +469,6 @@ canvas { display: block; width: 100%; height: 100%; }
   };
 
   let activeChartController = null;
-  let currentSymbol = null;
 
   async function drawKlineChart(symbol) {
     if (activeChartController) activeChartController.abort();
@@ -477,7 +487,6 @@ canvas { display: block; width: 100%; height: 100%; }
       const ma45 = calculateSMA(closes, P2);
       const ma60 = calculateSMA(closes, P3);
 
-      // 計算 5VM、10VM 與 20VM
       const vm5 = calculateSMA(volumes, 5);
       const vm10 = calculateSMA(volumes, 10);
       const vm20 = calculateSMA(volumes, 20);
@@ -517,7 +526,6 @@ canvas { display: block; width: 100%; height: 100%; }
       const padding = { top: 20, bottom: 15, left: 10, right: 60 };
       const totalH = height - padding.top - padding.bottom;
       
-      // 調整畫面比例為 6:4 (0.57 : 0.38)
       const priceH = totalH * 0.57;
       const volH = totalH * 0.38;
       const volTop = padding.top + priceH + totalH * 0.05;
@@ -611,13 +619,11 @@ canvas { display: block; width: 100%; height: 100%; }
         ctx.stroke();
       };
 
-      // 繪製價格 MA 線
       drawLine(showMA5, '#00ff66', getYPrice);
       drawLine(showMA30, '#ffea00', getYPrice);
       drawLine(showMA45, '#ff9100', getYPrice);
       drawLine(showMA60, '#ff007f', getYPrice);
 
-      // 繪製成交量 VM 線 (包含 10VM)
       drawLine(showVM5, '#00f0ff', getYVol, 1.2);
       drawLine(showVM10, '#00ff66', getYVol, 1.2);
       drawLine(showVM20, '#9d4edd', getYVol, 1.2);
@@ -627,14 +633,17 @@ canvas { display: block; width: 100%; height: 100%; }
     }
   }
 
-  function openChartModal(symbol) {
-    currentSymbol = symbol;
-    dom.symbolTitle.innerText = symbol;
+  function openChartModal(index) {
+    if (index < 0 || index >= rawResults.length) return;
+    currentIndex = index;
+    const item = rawResults[currentIndex];
+    
+    dom.symbolTitle.innerText = `#${currentIndex + 1} ${item.symbol}`;
     dom.chartModal.classList.add('active');
     dom.chartModal.setAttribute('aria-hidden', 'false');
     document.body.classList.add('modal-open');
 
-    drawKlineChart(symbol);
+    drawKlineChart(item.symbol);
   }
 
   function closeChartModal() {
@@ -642,8 +651,45 @@ canvas { display: block; width: 100%; height: 100%; }
     dom.chartModal.classList.remove('active');
     dom.chartModal.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('modal-open');
-    currentSymbol = null;
+    currentIndex = -1;
   }
+
+  function nextSymbol() {
+    if (currentIndex >= 0 && currentIndex < rawResults.length - 1) {
+      openChartModal(currentIndex + 1);
+    }
+  }
+
+  function prevSymbol() {
+    if (currentIndex > 0) {
+      openChartModal(currentIndex - 1);
+    }
+  }
+
+  // 滑動觸控切換標的邏輯
+  let touchStartX = 0;
+  let touchStartY = 0;
+
+  dom.chartBox.addEventListener('touchstart', (e) => {
+    touchStartX = e.changedTouches[0].screenX;
+    touchStartY = e.changedTouches[0].screenY;
+  }, { passive: true });
+
+  dom.chartBox.addEventListener('touchend', (e) => {
+    const touchEndX = e.changedTouches[0].screenX;
+    const touchEndY = e.changedTouches[0].screenY;
+    const diffX = touchEndX - touchStartX;
+    const diffY = touchEndY - touchStartY;
+
+    // 確保主要是水平滑動且滑動距離足夠（至少 40px）
+    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 40) {
+      if (diffX < 0) {
+        nextSymbol(); // 向左滑動，看下一個標的
+      } else {
+        prevSymbol(); // 向右滑動，看上一個標的
+      }
+    }
+  }, { passive: true });
 
   dom.scanBtn.addEventListener('click', startScan);
   dom.closeModalBtn.addEventListener('click', closeChartModal);
@@ -653,14 +699,20 @@ canvas { display: block; width: 100%; height: 100%; }
   });
   
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && dom.chartModal.classList.contains('active')) {
+    if (!dom.chartModal.classList.contains('active')) return;
+
+    if (e.key === 'Escape') {
       closeChartModal();
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      nextSymbol();
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      prevSymbol();
     }
   });
 
   window.addEventListener('resize', () => {
-    if (dom.chartModal.classList.contains('active') && currentSymbol) {
-      drawKlineChart(currentSymbol);
+    if (dom.chartModal.classList.contains('active') && currentIndex >= 0) {
+      drawKlineChart(rawResults[currentIndex].symbol);
     }
   });
 
