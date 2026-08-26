@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>SMC 掃描器 - 1h 均線量能完整版</title>
+    <title>SMC 掃描器 - 回檔 30MA 守 60MA 版</title>
 
     <!-- 🌐 預先建立 API 與 CDN 連線 -->
     <link rel="preconnect" href="https://fapi.binance.com" crossorigin>
@@ -209,7 +209,7 @@
 
     <header>
         <div class="header-title">
-            <h1>🎯 SMC 掃描器 (1h 均線量能版)</h1>
+            <h1>🎯 SMC 掃描器 (回檔30MA/守60MA)</h1>
             <div class="status-badge">
                 <span class="status-dot"></span>
                 <span>REST API 快取模式</span>
@@ -230,7 +230,8 @@
         <div class="control-row">
             <select id="strategyFilter" onchange="renderTable()">
                 <option value="ALL">全部策略 / 趨勢篩選</option>
-                <option value="TREND">純 1h MA+VM 趨勢</option>
+                <option value="PULLBACK">PULLBACK (回檔 30MA 守 60MA)</option>
+                <option value="TREND">TREND (純均線量能趨勢)</option>
                 <option value="SFP">SFP 假突破抓反轉</option>
                 <option value="FVG">FVG 缺口回補</option>
             </select>
@@ -453,7 +454,6 @@
                 await Promise.all(chunk.map(async (target) => {
                     const symbol = target.symbol;
                     try {
-                        // 修改時區為 1h，limit 增加至 75 以提供 60MA 計算空間
                         const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1h&limit=75`);
                         if (!res.ok) return;
                         const rawKlines = await res.json();
@@ -546,7 +546,6 @@
             sendTelegramMessage(tgMessage);
         }
 
-        // 計算簡單移動平均 (SMA)
         function calculateSMA(dataArray, period) {
             if (dataArray.length < period) return null;
             const slice = dataArray.slice(-period);
@@ -554,7 +553,7 @@
             return sum / period;
         }
 
-        // 核心判斷：1h 30/45/60 MA 排列 + 5VM/20VM 量能條件
+        // 核心邏輯：回檔 30MA 入場，止損守住 60MA
         function detectSMC(klines) {
             const len = klines.length;
             if (len < 60) return null;
@@ -573,20 +572,40 @@
 
             const curr = klines[len - 1];
 
-            // 🟢【多頭趨勢條件】：30MA > 45MA > 60MA 且 5VM > 20VM
-            const isBullTrend = (ma30 > ma45) && (ma45 > ma60);
+            // 多頭趨勢與回檔入場條件
+            const isBullStructure = (ma30 > ma45) && (ma45 > ma60);
             const isVolVolumeUp = vm5 > vm20;
+            const isPullbackToMA30 = (curr.close < ma30) && (curr.close > ma60);
 
-            // 🔴【空頭趨勢條件】：30MA < 45MA < 60MA 且 5VM < 20VM
-            const isBearTrend = (ma30 < ma45) && (ma45 < ma60);
+            if (isBullStructure && isVolVolumeUp && isPullbackToMA30) {
+                return { 
+                    code: "PULLBACK", 
+                    name: "回檔30MA多單 (守60MA)", 
+                    direction: "LONG", 
+                    stopLoss: parseFloat((ma60 * 0.998).toFixed(4)) 
+                };
+            }
+
+            // 空頭趨勢與反彈入場條件
+            const isBearStructure = (ma30 < ma45) && (ma45 < ma60);
             const isVolVolumeDown = vm5 < vm20;
+            const isRallyToMA30 = (curr.close > ma30) && (curr.close < ma60);
 
+            if (isBearStructure && isVolVolumeDown && isRallyToMA30) {
+                return { 
+                    code: "PULLBACK", 
+                    name: "反彈30MA空單 (守60MA)", 
+                    direction: "SHORT", 
+                    stopLoss: parseFloat((ma60 * 1.002).toFixed(4)) 
+                };
+            }
+
+            // --- 額外 SMC 形態備用判斷 ---
             const prevSlice = klines.slice(len - 25, len - 2);
             const highestHigh = Math.max(...prevSlice.map(k => k.high));
             const lowestLow = Math.min(...prevSlice.map(k => k.low));
 
-            // 多頭觸發邏輯
-            if (isBullTrend && isVolVolumeUp) {
+            if (isBullStructure && isVolVolumeUp) {
                 if (curr.low < lowestLow && curr.close > lowestLow) {
                     return { code: "SFP", name: "多頭+量增 SFP", direction: "LONG", stopLoss: parseFloat((curr.low * 0.9985).toFixed(4)) };
                 }
@@ -598,8 +617,7 @@
                 return { code: "TREND", name: "多頭排列 (5VM>20VM)", direction: "LONG", stopLoss: parseFloat((ma30 * 0.995).toFixed(4)) };
             }
 
-            // 空頭觸發邏輯
-            if (isBearTrend && isVolVolumeDown) {
+            if (isBearStructure && isVolVolumeDown) {
                 if (curr.high > highestHigh && curr.close < highestHigh) {
                     return { code: "SFP", name: "空頭+量縮 SFP", direction: "SHORT", stopLoss: parseFloat((curr.high * 1.0015).toFixed(4)) };
                 }
