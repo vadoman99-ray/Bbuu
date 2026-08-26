@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>SMC 掃描器 - 同步多頭突破 20K 高點版</title>
+    <title>SMC 掃描器 - 雙週期以上創20日新高版</title>
 
     <!-- 🌐 預先建立 API 與 CDN 連線 -->
     <link rel="preconnect" href="https://fapi.binance.com" crossorigin>
@@ -210,7 +210,7 @@
 
     <header>
         <div class="header-title">
-            <h1>🚀 突破掃描器 (同步多頭 + 過20K高點)</h1>
+            <h1>🚀 突破掃描器 (雙週期以上創20日新高)</h1>
             <div class="status-badge">
                 <span class="status-dot"></span>
                 <span>REST API 快取模式</span>
@@ -231,11 +231,11 @@
         <div class="control-row">
             <select id="strategyFilter" onchange="renderTable()">
                 <option value="ALL">全部標的</option>
-                <option value="BREAKOUT_20K">多頭突破 20K 高點</option>
+                <option value="MULTI_NEW_HIGH">雙週期以上創20日新高</option>
             </select>
         </div>
 
-        <button id="scanBtn" onclick="scanAllMarketSMC()">⚡ 掃描 ≥1 億 成交額標的 (同步多頭突破)</button>
+        <button id="scanBtn" onclick="scanAllMarketSMC()">⚡ 掃描 ≥1 億 成交額標的 (多週期新高突破)</button>
         
         <div class="control-row">
             <span id="lastUpdate" style="color: var(--text-secondary); font-size: 11px;">最後更新: --:--:--</span>
@@ -407,6 +407,17 @@
             }
         }
 
+        // 解析 K 棒陣列
+        function parseKlines(raw) {
+            return raw.map(k => ({
+                time: k[0],
+                high: parseFloat(k[2]),
+                low: parseFloat(k[3]),
+                close: parseFloat(k[4]),
+                volume: parseFloat(k[5])
+            }));
+        }
+
         async function scanAllMarketSMC() {
             if (isScanning) return;
             isScanning = true;
@@ -423,9 +434,9 @@
 
             logEvent("🌐 篩選 24h 成交額 ≥ 1 億 USDT 標的...");
             const targetSymbols = await fetchHighVolumeSymbols();
-            logEvent(`⚡ 符合標的共 ${targetSymbols.length} 個，開始多頭突破掃描...`);
+            logEvent(`⚡ 符合標的共 ${targetSymbols.length} 個，開始跨週期 20K 新高掃描...`);
 
-            const BATCH_SIZE = 15;
+            const BATCH_SIZE = 10;
             let completed = 0;
 
             for (let i = 0; i < targetSymbols.length; i += BATCH_SIZE) {
@@ -433,35 +444,36 @@
                 await Promise.all(chunk.map(async (target) => {
                     const symbol = target.symbol;
                     try {
-                        const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1h&limit=75`);
-                        if (!res.ok) return;
-                        const rawKlines = await res.json();
-                        
-                        const parsedKlines = rawKlines.map(k => ({
-                            time: k[0],
-                            high: parseFloat(k[2]),
-                            low: parseFloat(k[3]),
-                            close: parseFloat(k[4]),
-                            volume: parseFloat(k[5])
-                        }));
+                        // 同時獲取 日線(1d)、4小時(4h)、1小時(1h) K 棒
+                        const [res1d, res4h, res1h] = await Promise.all([
+                            fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1d&limit=30`),
+                            fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=4h&limit=30`),
+                            fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1h&limit=50`)
+                        ]);
 
-                        const smcResult = detectSMC(parsedKlines);
-                        if (smcResult) {
-                            const latestPrice = parsedKlines[parsedKlines.length - 1].close;
+                        if (!res1d.ok || !res4h.ok || !res1h.ok) return;
+
+                        const klines1d = parseKlines(await res1d.json());
+                        const klines4h = parseKlines(await res4h.json());
+                        const klines1h = parseKlines(await res1h.json());
+
+                        const result = detectMultiTimeframe20NewHigh(klines1d, klines4h, klines1h);
+                        if (result) {
+                            const latestPrice = klines1h[klines1h.length - 1].close;
                             marketDataMap[symbol] = {
                                 symbol: symbol,
                                 price: latestPrice,
                                 priceChangePercent: target.priceChangePercent,
                                 volumeUsdt: target.quoteVolume,
-                                strategyCode: smcResult.code,
-                                strategyName: smcResult.name,
-                                timeframe: "1h",
-                                direction: smcResult.direction,
+                                strategyCode: result.code,
+                                strategyName: result.name,
+                                timeframe: "多週期",
+                                direction: result.direction,
                                 entry: latestPrice,
-                                stopLoss: smcResult.stopLoss,
-                                cachedKlines: parsedKlines
+                                stopLoss: result.stopLoss,
+                                cachedKlines: klines1h
                             };
-                            checkAndSendTgAlert(symbol, smcResult, latestPrice);
+                            checkAndSendTgAlert(symbol, result, latestPrice);
                         }
                     } catch (e) {
                     } finally {
@@ -477,7 +489,7 @@
             isScanning = false;
             scanBtn.disabled = false;
             progressContainer.style.display = "none";
-            logEvent(`🎉 掃描完成！獲得 ${Object.keys(marketDataMap).length} 個多頭突破 20K 高點標的。`);
+            logEvent(`🎉 掃描完成！獲得 ${Object.keys(marketDataMap).length} 個符合雙週期以上創20日新高標的。`);
             renderTable();
             updateHeaderTime();
         }
@@ -513,56 +525,68 @@
             const stopLossPct = (Math.abs(price - smc.stopLoss) / price * 100).toFixed(2);
 
             const tgMessage = 
-`🚀 <b>【多頭突破 20K 高點訊號觸發】</b>
+`🚀 <b>【雙週期以上創20日新高觸發】</b>
 
 📌 <b>標的</b>：<code>${symbol}</code>
 ⚡ <b>戰法</b>：<b>${smc.name}</b>
-📈 <b>方向</b>：🟢 做多 (突破前 20 根 K 棒最高點)
+📈 <b>方向</b>：🟢 做多 (跨週期強勢突破)
 💵 <b>現價</b>：<code>$${price} USDT</code>
 🛡️ <b>止損</b>：<code>$${smc.stopLoss} USDT</code> (${stopLossPct}%)`;
 
             sendTelegramMessage(tgMessage);
         }
 
-        function calculateSMA(dataArray, period) {
-            if (dataArray.length < period) return null;
-            const slice = dataArray.slice(-period);
-            const sum = slice.reduce((acc, val) => acc + val, 0);
-            return sum / period;
-        }
+        // 核心邏輯：檢測是否有至少 2 個週期同時創下前 20 根 K 棒新高
+        function detectMultiTimeframe20NewHigh(klines1d, klines4h, klines1h) {
+            let hitCount = 0;
+            let hitLabels = [];
 
-        function detectSMC(klines) {
-            const len = klines.length;
-            if (len < 60) return null;
+            // 1. 檢查 日線 (1D) 是否創 20 日新高
+            if (klines1d.length >= 21) {
+                const currentClose = klines1d[klines1d.length - 1].close;
+                const past20 = klines1d.slice(klines1d.length - 21, klines1d.length - 1);
+                const maxHigh20 = Math.max(...past20.map(k => k.high));
+                if (currentClose > maxHigh20) {
+                    hitCount++;
+                    hitLabels.push("1D");
+                }
+            }
 
-            const closePrices = klines.map(k => k.close);
-            const volumes = klines.map(k => k.volume);
+            // 2. 檢查 4小時 (4H) 是否創 20 根 K 棒新高
+            if (klines4h.length >= 21) {
+                const currentClose = klines4h[klines4h.length - 1].close;
+                const past20 = klines4h.slice(klines4h.length - 21, klines4h.length - 1);
+                const maxHigh20 = Math.max(...past20.map(k => k.high));
+                if (currentClose > maxHigh20) {
+                    hitCount++;
+                    hitLabels.push("4H");
+                }
+            }
 
-            const ma30 = calculateSMA(closePrices, 30);
-            const ma45 = calculateSMA(closePrices, 45);
-            const ma60 = calculateSMA(closePrices, 60);
+            // 3. 檢查 1小時 (1H) 是否創 20 根 K 棒新高
+            if (klines1h.length >= 21) {
+                const currentClose = klines1h[klines1h.length - 1].close;
+                const past20 = klines1h.slice(klines1h.length - 21, klines1h.length - 1);
+                const maxHigh20 = Math.max(...past20.map(k => k.high));
+                if (currentClose > maxHigh20) {
+                    hitCount++;
+                    hitLabels.push("1H");
+                }
+            }
 
-            const vm5 = calculateSMA(volumes, 5);
-            const vm20 = calculateSMA(volumes, 20);
+            // 只要有 2 個（含）以上週期創 20 日新高即符合條件
+            if (hitCount >= 2) {
+                const currentPrice = klines1h[klines1h.length - 1].close;
+                // 自動計算支撐止損（採 1H 前 20 根高點與 99.2% 取低值）
+                const past20_1h = klines1h.slice(klines1h.length - 21, klines1h.length - 1);
+                const maxHigh20_1h = Math.max(...past20_1h.map(k => k.high));
+                const stopLossVal = Math.min(maxHigh20_1h * 0.995, currentPrice * 0.985);
 
-            if (!ma30 || !ma45 || !ma60 || !vm5 || !vm20) return null;
-
-            const curr = klines[len - 1];
-
-            const isBullTrend = (ma30 > ma45) && (ma45 > ma60) && (vm5 > vm20);
-
-            if (!isBullTrend) return null;
-
-            const past20Klines = klines.slice(len - 21, len - 1);
-            const maxHigh20 = Math.max(...past20Klines.map(k => k.high));
-
-            if (curr.close > maxHigh20) {
-                const stopLossVal = Math.min(maxHigh20 * 0.995, ma30 * 0.995);
-                return { 
-                    code: "BREAKOUT_20K", 
-                    name: "同步多頭+過20K高點", 
-                    direction: "LONG", 
-                    stopLoss: parseFloat(stopLossVal.toFixed(4)) 
+                return {
+                    code: "MULTI_NEW_HIGH",
+                    name: `突破20日新高(${hitLabels.join('+')})`,
+                    direction: "LONG",
+                    stopLoss: parseFloat(stopLossVal.toFixed(4))
                 };
             }
 
@@ -657,7 +681,6 @@
         }
 
         function renderModalChartFromCache(klines) {
-            // 抓取最近 50 根 K 棒走勢圖，讓細節更清晰
             const recentKlines = klines.slice(-50);
             const closePrices = recentKlines.map(k => k.close);
             const times = recentKlines.map(k => {
