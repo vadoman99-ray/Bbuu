@@ -1,760 +1,666 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>SMC 掃描器 - 短線雙週期(15m/30m/1h)創20K新高版</title>
+<!DOCTYPE html> 
+<html lang="zh-TW"> 
+<head> 
+<meta charset="UTF-8"> 
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"> 
+<title>⚡ 1H MA 多頭排列全排行 (>1億USDT)</title> 
+<style> 
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;800&family=Noto+Sans+TC:wght@700;900&family=JetBrains+Mono:wght@700;800;900&display=swap'); 
+:root { 
+  --bg-dark: #060911; 
+  --card-bg: rgba(15, 23, 42, 0.75); 
+  --border-color: rgba(0, 240, 255, 0.25); 
+  --manga-pink: #ff007f; 
+  --manga-purple: #9d4edd; 
+  --manga-cyan: #00f0ff; 
+  --manga-yellow: #ffea00; 
+  --manga-orange: #ff9100; 
+  --manga-green: #00ff66; 
+  --manga-red: #ff2a6d; 
+} 
+* { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; } 
+body { 
+  font-family: 'Plus Jakarta Sans', 'Noto Sans TC', sans-serif; 
+  background-color: var(--bg-dark); 
+  background-image: radial-gradient(at 0% 0%, rgba(255, 0, 127, 0.12) 0px, transparent 50%), 
+                    radial-gradient(at 100% 100%, rgba(0, 240, 255, 0.12) 0px, transparent 50%), 
+                    radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px); 
+  background-size: 100% 100%, 100% 100%, 20px 20px; 
+  color: #fff; margin: 0; padding-bottom: 50px; min-height: 100vh; 
+} 
+body.modal-open { overflow: hidden; position: fixed; width: 100%; height: 100%; }
 
-    <!-- 🌐 預先建立 API 與 CDN 連線 -->
-    <link rel="preconnect" href="https://fapi.binance.com" crossorigin>
-    <link rel="dns-prefetch" href="https://fapi.binance.com">
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+.app-header { 
+  position: sticky; top: 0; z-index: 100; background: rgba(8, 12, 22, 0.88); 
+  backdrop-filter: blur(14px); border-bottom: 1px solid var(--border-color); 
+  padding: 12px 16px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.6); 
+} 
+.header-top { display: flex; justify-content: space-between; align-items: center; } 
+.header-title { 
+  font-size: 1.1rem; font-weight: 900; letter-spacing: -0.5px; 
+  background: linear-gradient(135deg, #fff 30%, var(--manga-cyan)); 
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; display: flex; align-items: center; gap: 6px; 
+} 
 
-    <!-- 🌐 Defer 載入 Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+.header-controls { display: flex; align-items: center; gap: 10px; }
 
-    <style>
-        :root {
-            --bg-primary: #0d1117;
-            --bg-secondary: #161b22;
-            --bg-card: #21262d;
-            --border-color: #30363d;
-            --text-primary: #c9d1d9;
-            --text-secondary: #8b949e;
-            --accent-green: #2ea043;
-            --accent-red: #da3633;
-            --accent-blue: #58a6ff;
-            --accent-yellow: #d29922;
-            --accent-purple: #bc8cff;
-        }
+/* Telegram 與自動掃描設定面板 */
+.config-panel {
+  display: flex; flex-wrap: wrap; gap: 8px; background: rgba(0, 240, 255, 0.05);
+  border: 1px solid var(--border-color); padding: 8px 12px; border-radius: 8px; font-size: 0.8rem;
+  align-items: center; justify-content: space-between;
+}
+.config-inputs { display: flex; gap: 6px; flex: 1; min-width: 280px; }
+.config-inputs input {
+  background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; flex: 1;
+}
 
-        * { 
-            box-sizing: border-box; 
-            margin: 0; 
-            padding: 0; 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            -webkit-tap-highlight-color: transparent;
-        }
-        
-        body { 
-            background-color: var(--bg-primary); 
-            color: var(--text-primary); 
-            padding: 12px; 
-            padding-top: calc(12px + env(safe-area-inset-top));
-            padding-bottom: calc(20px + env(safe-area-inset-bottom));
-            font-size: 14px; 
-            min-height: 100vh;
-        }
-        
-        header { 
-            display: flex; 
-            flex-direction: column;
-            gap: 6px;
-            padding-bottom: 12px; 
-            border-bottom: 1px solid var(--border-color); 
-            margin-bottom: 12px; 
-        }
-        .header-title {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        header h1 { font-size: 16px; font-weight: 700; color: #fff; }
-        .status-badge { 
-            background-color: rgba(88, 166, 255, 0.15); 
-            color: var(--accent-blue); 
-            padding: 3px 8px; 
-            border-radius: 12px; 
-            font-size: 11px; 
-            border: 1px solid rgba(88, 166, 255, 0.4); 
-            display: inline-flex; 
-            align-items: center; 
-            gap: 4px; 
-            width: fit-content;
-        }
-        .status-dot { width: 6px; height: 6px; border-radius: 50%; background-color: var(--accent-blue); }
+.auto-scan-box { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 700; color: var(--manga-cyan); }
+.timer-text { font-family: 'JetBrains Mono', monospace; color: var(--manga-yellow); }
 
-        .tg-panel { 
-            display: flex; 
-            flex-direction: column;
-            gap: 8px; 
-            background-color: rgba(88, 166, 255, 0.08); 
-            padding: 10px; 
-            border-radius: 8px; 
-            border: 1px solid rgba(88, 166, 255, 0.3); 
-            margin-bottom: 12px; 
-        }
-        .tg-panel label { font-size: 12px; color: var(--accent-blue); font-weight: 600; }
-        .tg-inputs { display: flex; gap: 6px; }
+.scan-btn { 
+  background: linear-gradient(135deg, var(--manga-pink) 0%, #ff5500 100%); 
+  color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 900; font-size: 0.85rem; cursor: pointer; 
+  box-shadow: 0 0 15px rgba(255, 0, 127, 0.4); transition: transform 0.15s ease, filter 0.2s ease; 
+  will-change: transform; white-space: nowrap;
+} 
+.scan-btn:active { transform: scale(0.95); } 
+.scan-btn:disabled { opacity: 0.5; filter: grayscale(1); cursor: not-allowed; } 
+.progress-container { height: 3px; background: rgba(255, 255, 255, 0.05); width: 100%; } 
+.progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--manga-pink), var(--manga-cyan)); transition: width 0.1s linear; } 
+.dashboard { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 16px; } 
+.stat-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 12px; text-align: center; backdrop-filter: blur(10px); } 
+.stat-card .val { font-family: 'JetBrains Mono', monospace; font-size: 1.6rem; font-weight: 800; } 
+.stat-card.entry { border-color: rgba(255, 0, 127, 0.4); } 
+.stat-card.entry .val { color: var(--manga-pink); text-shadow: 0 0 10px rgba(255, 0, 127, 0.3); } 
+.container { padding: 0 16px; } 
 
-        .controls { 
-            display: flex; 
-            flex-direction: column;
-            gap: 10px; 
-            background-color: var(--bg-secondary); 
-            padding: 12px; 
-            border-radius: 8px; 
-            border: 1px solid var(--border-color); 
-            margin-bottom: 12px; 
-        }
-        .control-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
-        
-        select, input, button { 
-            background-color: var(--bg-card); 
-            color: var(--text-primary); 
-            border: 1px solid var(--border-color); 
-            padding: 8px 10px; 
-            border-radius: 6px; 
-            font-size: 13px; 
-            outline: none; 
-            width: 100%;
-        }
-        button { 
-            cursor: pointer; 
-            background-color: #238636; 
-            color: #fff; 
-            font-weight: 600; 
-            border: none; 
-            text-align: center;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        button:active { opacity: 0.8; }
-        button:disabled { background-color: #30363d; color: var(--text-secondary); }
-        .btn-tg { background-color: #1f6feb; white-space: nowrap; width: auto; }
+.symbol-card { 
+  background: var(--card-bg); border: 1px solid rgba(255, 255, 255, 0.08); border-left: 4px solid var(--manga-green); border-radius: 12px; 
+  padding: 14px 16px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; backdrop-filter: blur(10px); 
+  cursor: pointer; transition: border-color 0.2s, transform 0.2s, background-color 0.2s; 
+  will-change: transform;
+} 
+.symbol-card:hover { border-color: var(--manga-cyan); background: rgba(0, 240, 255, 0.08); transform: translateY(-2px); } 
+.symbol-card:active { transform: scale(0.98); }
+.symbol-name { font-family: 'JetBrains Mono', monospace; font-size: 1.15rem; font-weight: 800; } 
+.symbol-price { font-family: 'JetBrains Mono', monospace; font-size: 1.1rem; color: var(--manga-yellow); font-weight: 700; } 
+.detail-row { font-size: 0.8rem; font-family: 'JetBrains Mono', monospace; color: #94a3b8; margin-top: 4px; } 
 
-        .progress-bar-container { width: 100%; background-color: var(--bg-card); border-radius: 4px; height: 4px; overflow: hidden; display: none; }
-        .progress-bar { height: 100%; background-color: var(--accent-blue); width: 0%; transition: width 0.1s ease; }
+.badge-rank { font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: 800; background: rgba(255, 255, 255, 0.1); color: #fff; } 
+.badge-bull { font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: 800; background: rgba(0, 255, 102, 0.15); color: var(--manga-green); border: 1px solid var(--manga-green); }
+.val-up { color: var(--manga-green); } 
+.val-down { color: var(--manga-red); } 
 
-        .tab-container { display: flex; gap: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 8px; }
-        .tab-btn { 
-            flex: 1;
-            background-color: transparent; 
-            border: 1px solid var(--border-color); 
-            color: var(--text-secondary); 
-            padding: 8px 4px; 
-            border-radius: 6px; 
-            font-weight: 600; 
-            font-size: 12px; 
-            display: flex; 
-            justify-content: center;
-            align-items: center; 
-            gap: 4px; 
-        }
-        .tab-btn.active-long { background-color: rgba(46, 160, 67, 0.2); color: var(--accent-green); border-color: var(--accent-green); }
+/* Modal 區塊 - 優化適應單一視窗 */
+.chart-modal {
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; height: 100dvh;
+  background: rgba(4, 6, 14, 0.95); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  z-index: 1000; display: none; justify-content: center; align-items: center; padding: 12px;
+  overflow: hidden; touch-action: none;
+}
+.chart-modal.active { display: flex; }
+.chart-box {
+  width: 100%; max-width: 1050px; height: 100%; max-height: 90vh; max-height: 90dvh; background: #0b0f19;
+  border: 1px solid rgba(0, 240, 255, 0.35); border-radius: 16px; overflow: hidden;
+  display: flex; flex-direction: column; box-shadow: 0 0 50px rgba(0, 240, 255, 0.2);
+}
 
-        .panel { background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.chart-header {
+  padding: 8px 12px; background: #111726; display: flex; justify-content: space-between; align-items: center;
+  border-bottom: 1px solid rgba(255,255,255,0.08); gap: 6px; flex-shrink: 0;
+}
 
-        .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-        table { width: 100%; min-width: 340px; border-collapse: collapse; font-size: 12px; text-align: left; }
-        th { color: var(--text-secondary); padding: 8px 6px; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
-        td { padding: 10px 6px; border-bottom: 1px solid rgba(48, 54, 61, 0.5); white-space: nowrap; }
+.header-title-group { display: flex; align-items: center; gap: 6px; }
+.symbol-title { font-family: 'JetBrains Mono', monospace; font-size: 1rem; font-weight: 800; color: #fff; }
 
-        tr { cursor: pointer; }
-        tr:hover { background-color: rgba(255, 255, 255, 0.03); }
+.ma5-status-badge {
+  font-family: 'JetBrains Mono', 'Noto Sans TC', sans-serif;
+  font-size: 0.7rem; font-weight: 800; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center;
+}
+.ma5-status-badge.above { background: rgba(0, 255, 102, 0.15); color: var(--manga-green); border: 1px solid var(--manga-green); }
+.ma5-status-badge.below { background: rgba(255, 42, 109, 0.15); color: var(--manga-red); border: 1px solid var(--manga-red); }
 
-        .tag { padding: 2px 4px; border-radius: 4px; font-size: 10px; font-weight: 600; display: inline-block; }
-        .tag-bull { background-color: rgba(46, 160, 67, 0.2); color: var(--accent-green); }
-        .tag-strategy { background-color: rgba(188, 140, 255, 0.15); color: var(--accent-purple); border: 1px solid rgba(188, 140, 255, 0.3); }
+.legend-bar { display: flex; gap: 6px; font-size: 0.65rem; font-family: 'JetBrains Mono', monospace; flex-wrap: wrap; }
+.legend-item { display: flex; align-items: center; gap: 3px; }
+.legend-color { width: 6px; height: 6px; border-radius: 2px; }
 
-        .log-feed { font-family: monospace; font-size: 10px; background-color: #0d1117; padding: 8px; border-radius: 6px; height: 80px; overflow-y: auto; border: 1px solid var(--border-color); color: #a3b8cc; margin-top: 12px; }
+.close-btn {
+  background: rgba(255,255,255,0.08); color: #a0aec0; border: 1px solid rgba(255,255,255,0.1); border-radius: 50%;
+  width: 28px; height: 28px; font-size: 0.9rem; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background-color 0.15s ease; flex-shrink: 0;
+}
+.close-btn:hover { background: var(--manga-red); color: #fff; border-color: var(--manga-red); }
 
-        .modal-overlay {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            width: 100vw; height: 100vh;
-            background: rgba(0, 0, 0, 0.85);
-            display: none; justify-content: center; align-items: flex-end;
-            z-index: 9999; backdrop-filter: blur(4px);
-        }
-        .modal-content {
-            background-color: var(--bg-secondary);
-            border-top: 1px solid var(--border-color);
-            border-radius: 16px 16px 0 0; 
-            width: 100%;
-            max-height: 90vh;
-            overflow-y: auto; 
-            -webkit-overflow-scrolling: touch;
-            padding: 16px; 
-            padding-bottom: calc(16px + env(safe-area-inset-bottom));
-            display: flex; 
-            flex-direction: column; 
-            gap: 12px;
-            box-shadow: 0 -4px 24px rgba(0,0,0,0.8);
-        }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
-        .modal-close { font-size: 20px; cursor: pointer; color: var(--text-secondary); padding: 4px 8px; }
-        .modal-grid { display: flex; flex-direction: column; gap: 12px; }
-        .calc-form { background-color: var(--bg-card); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 8px; }
-        .form-group { display: flex; flex-direction: column; gap: 2px; }
-        .form-group label { font-size: 11px; color: var(--text-secondary); }
-        .form-group input { font-size: 13px; padding: 6px; }
-        
-        .calc-results { 
-            background-color: #0d1117; 
-            border: 1px solid var(--border-color); 
-            border-radius: 8px; 
-            padding: 10px; 
-            display: grid; 
-            grid-template-columns: repeat(2, 1fr); 
-            gap: 10px; 
-        }
-        .result-item { display: flex; flex-direction: column; }
-        .result-label { font-size: 11px; color: var(--text-secondary); }
-        .result-value { font-size: 13px; font-weight: 600; margin-top: 2px; }
-        .chart-box { height: 220px; position: relative; background-color: var(--bg-card); border-radius: 8px; padding: 8px; border: 1px solid var(--border-color); }
-    </style>
-</head>
-<body>
+.chart-container { flex: 1; width: 100%; height: 100%; position: relative; background: #060911; overflow: hidden; }
+canvas { display: block; width: 100%; height: 100%; }
 
-    <header>
-        <div class="header-title">
-            <h1>🚀 突破掃描器 (15m/30m/1h 雙週期以上創20K新高)</h1>
-            <div class="status-badge">
-                <span class="status-dot"></span>
-                <span>REST API 快取模式</span>
-            </div>
-        </div>
-    </header>
+@media (max-width: 600px) {
+  .chart-modal { padding: 0; }
+  .chart-box { max-height: 100vh; max-height: 100dvh; border-radius: 0; border: none; }
+  .chart-header { padding: 6px 10px; }
+  .symbol-title { font-size: 0.9rem; }
+  .legend-bar { font-size: 0.6rem; gap: 4px; }
+}
+</style> 
+</head> 
+<body> 
 
-    <div class="tg-panel">
-        <label>🤖 Telegram 即時推播設定</label>
-        <div class="tg-inputs">
-            <input type="password" id="tgBotToken" placeholder="Bot Token" onchange="saveTgSettings()">
-            <input type="text" id="tgChatId" placeholder="Chat ID" onchange="saveTgSettings()">
-            <button class="btn-tg" onclick="testTelegramNotification()">測試</button>
-        </div>
+<div class="app-header"> 
+  <div class="header-top"> 
+    <div class="header-title">⚡ 1H MA 多頭排列全排行 (>1億USDT)</div> 
+    <div class="header-controls">
+      <button id="scanBtn" class="scan-btn">啟動極速掃描</button> 
+    </div>
+  </div> 
+
+  <!-- Telegram 設定與每 60 秒自動掃描控制面板 -->
+  <div class="config-panel">
+    <div class="config-inputs">
+      <input type="password" id="tgToken" placeholder="TG Bot Token" onchange="saveConfig()">
+      <input type="text" id="tgChatId" placeholder="TG Chat ID" onchange="saveConfig()">
+    </div>
+    <div class="auto-scan-box">
+      <label><input type="checkbox" id="autoScanToggle" checked onchange="toggleAutoScan()"> 每 60s 自動更新</label>
+      <span class="timer-text" id="timerCount">(60s)</span>
+    </div>
+  </div>
+</div> 
+
+<div class="progress-container"><div id="progress" class="progress-fill"></div></div> 
+
+<div class="dashboard"> 
+  <div class="stat-card"> 
+    <div class="val" id="statTotal" style="color:var(--manga-cyan)">0</div> 
+    <div style="font-size:0.75rem; color:#64748b; margin-top:2px;">掃描目標數 (>1億USDT)</div> 
+  </div> 
+  <div class="stat-card entry"> 
+    <div class="val" id="statEntry">0</div> 
+    <div style="font-size:0.75rem; color:#64748b; margin-top:2px;">符合 1H 多頭排列標的</div> 
+  </div> 
+</div> 
+
+<div class="container" id="symbolList"></div> 
+
+<div id="chartModal" class="chart-modal" aria-hidden="true">
+  <div id="chartBox" class="chart-box" role="dialog" aria-modal="true">
+    <div class="chart-header">
+      <div class="header-title-group">
+        <div id="symbolTitle" class="symbol-title">BTCUSDT</div>
+        <span id="ma5Badge" class="ma5-status-badge above">5MA 之上</span>
+      </div>
+      <div class="legend-bar">
+        <div class="legend-item"><div class="legend-color" style="background:#00ff66"></div>5MA</div>
+        <div class="legend-item"><div class="legend-color" style="background:#ffea00"></div>30MA</div>
+        <div class="legend-item"><div class="legend-color" style="background:#ff9100"></div>45MA</div>
+        <div class="legend-item"><div class="legend-color" style="background:#ff007f"></div>60MA</div>
+        <div class="legend-item"><div class="legend-color" style="background:#00f0ff"></div>5VM</div>
+        <div class="legend-item"><div class="legend-color" style="background:#9d4edd"></div>20VM</div>
+      </div>
+      <button id="closeModalBtn" class="close-btn" aria-label="關閉">✕</button>
     </div>
 
-    <div class="controls">
-        <div class="control-row">
-            <select id="strategyFilter" onchange="renderTable()">
-                <option value="ALL">全部標的</option>
-                <option value="MULTI_NEW_HIGH">短線雙週期以上創20K新高</option>
-            </select>
-        </div>
-
-        <button id="scanBtn" onclick="scanAllMarketSMC()">⚡ 掃描 ≥1 億 成交額標的 (15m/30m/1h)</button>
-        
-        <div class="control-row">
-            <span id="lastUpdate" style="color: var(--text-secondary); font-size: 11px;">最後更新: --:--:--</span>
-        </div>
-        
-        <div class="progress-bar-container" id="progressContainer">
-            <div class="progress-bar" id="progressBar"></div>
-        </div>
+    <div class="chart-container" id="canvasWrapper">
+      <canvas id="klineCanvas"></canvas>
     </div>
+  </div>
+</div>
 
-    <div class="panel">
-        <div class="tab-container">
-            <button class="tab-btn active-long" id="tabLongBtn">
-                🟢 多頭突破排行 <span id="longCount">(0)</span>
-            </button>
-        </div>
+<script> 
+(() => {
+  const API_BASE = 'https://fapi.binance.com'; 
+  const P0 = 5, P1 = 30, P2 = 45, P3 = 60; 
+  const MIN_VOLUME = 100000000;
+  const KLINE_SHOW_COUNT = 100;
+  const CONCURRENCY_LIMIT = 12;
 
-        <div class="table-container">
-            <table>
-                <thead>
-                    <tr>
-                        <th>幣種</th>
-                        <th>24h 漲跌</th>
-                        <th>成交額</th>
-                        <th>戰法/訊號</th>
-                        <th>操作</th>
-                    </tr>
-                </thead>
-                <tbody id="scannerTableBody"></tbody>
-            </table>
-        </div>
-    </div>
+  let rawResults = []; 
+  let tickerMap = new Map(); 
+  let isScanning = false;
+  let countdownSec = 60;
+  let timerInterval = null;
 
-    <div class="log-feed" id="logFeed"></div>
+  const dom = {
+    scanBtn: document.getElementById('scanBtn'),
+    progress: document.getElementById('progress'),
+    statTotal: document.getElementById('statTotal'),
+    statEntry: document.getElementById('statEntry'),
+    symbolList: document.getElementById('symbolList'),
+    chartModal: document.getElementById('chartModal'),
+    symbolTitle: document.getElementById('symbolTitle'),
+    ma5Badge: document.getElementById('ma5Badge'),
+    closeModalBtn: document.getElementById('closeModalBtn'),
+    canvasWrapper: document.getElementById('canvasWrapper'),
+    canvas: document.getElementById('klineCanvas'),
+    tgToken: document.getElementById('tgToken'),
+    tgChatId: document.getElementById('tgChatId'),
+    autoScanToggle: document.getElementById('autoScanToggle'),
+    timerCount: document.getElementById('timerCount')
+  };
 
-    <!-- 📊 行動端試算 Modal 彈窗 -->
-    <div class="modal-overlay" id="tradeModal" onclick="handleOverlayClick(event)">
-        <div class="modal-content" onclick="event.stopPropagation()">
-            <div class="modal-header">
-                <h3 id="modalTitle" style="color: #fff; font-size: 14px;">🎯 交易計畫試算</h3>
-                <span class="modal-close" onclick="closeModal()">✕</span>
-            </div>
+  const ctx = dom.canvas.getContext('2d');
 
-            <div class="modal-grid">
-                <div class="calc-form">
-                    <div class="form-group">
-                        <label>單筆承受虧損 (USDT)</label>
-                        <input type="number" id="inputLossUsdt" value="20" oninput="calculateTradePlan()">
-                    </div>
-                    <div style="display: flex; gap: 8px;">
-                        <div class="form-group" style="flex:1;">
-                            <label>槓桿倍數 (x)</label>
-                            <input type="number" id="inputLeverage" value="10" min="1" max="125" oninput="calculateTradePlan()">
-                        </div>
-                        <div class="form-group" style="flex:1;">
-                            <label>風報比 R:R (1:X)</label>
-                            <input type="number" id="inputRR" value="2" step="0.1" min="0.5" oninput="calculateTradePlan()">
-                        </div>
-                    </div>
-                </div>
+  // 本地儲存 TG Token 與 Chat ID
+  window.saveConfig = () => {
+    localStorage.setItem('TG_BOT_TOKEN', dom.tgToken.value.trim());
+    localStorage.setItem('TG_CHAT_ID', dom.tgChatId.value.trim());
+  };
 
-                <div class="calc-results">
-                    <div class="result-item">
-                        <span class="result-label">建議進場點</span>
-                        <span class="result-value" id="resEntry" style="color: var(--accent-blue);">0.00</span>
-                    </div>
-                    <div class="result-item">
-                        <span class="result-label">使用槓桿</span>
-                        <span class="result-value" id="resLeverage" style="color: var(--accent-purple);">10x</span>
-                    </div>
-                    <div class="result-item">
-                        <span class="result-label">下單投入本金 (保證金)</span>
-                        <span class="result-value" id="resMargin" style="color: #fff;">0.00 USDT</span>
-                    </div>
-                    <div class="result-item">
-                        <span class="result-label">總買入金額 (名義價值)</span>
-                        <span class="result-value" id="resPositionSize" style="color: var(--accent-yellow);">0.00 USDT</span>
-                    </div>
-                    <div class="result-item">
-                        <span class="result-label">止損價 (SL)</span>
-                        <span class="result-value" id="resStopLoss" style="color: var(--accent-red);">0.00</span>
-                    </div>
-                    <div class="result-item">
-                        <span class="result-label">預計止損金額</span>
-                        <span class="result-value" id="resStopLossAmount" style="color: var(--accent-red);">-0.00 USDT</span>
-                    </div>
-                    <div class="result-item">
-                        <span class="result-label">止盈價 (TP)</span>
-                        <span class="result-value" id="resTakeProfit" style="color: var(--accent-green);">0.00</span>
-                    </div>
-                    <div class="result-item">
-                        <span class="result-label">預計止盈金額</span>
-                        <span class="result-value" id="resTakeProfitAmount" style="color: var(--accent-green);">+0.00 USDT</span>
-                    </div>
-                </div>
+  function loadConfig() {
+    dom.tgToken.value = localStorage.getItem('TG_BOT_TOKEN') || '';
+    dom.tgChatId.value = localStorage.getItem('TG_CHAT_ID') || '';
+  }
 
-                <div class="chart-box">
-                    <canvas id="modalChart"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
+  // Telegram 通知傳送功能
+  async function sendTelegramNotification(results) {
+    const token = dom.tgToken.value.trim();
+    const chatId = dom.tgChatId.value.trim();
+    if (!token || !chatId) return;
 
-    <script>
-        let marketDataMap = {};
-        let currentModalItem = null;
-        let modalChartInstance = null;
-        let isScanning = false;
-        let pollingTimer = null;
-        let notifiedSignals = new Set();
+    let message = `⚡ <b>1H MA 多頭排列全排行 (>1億USDT)</b>\n`;
+    message += `符合條件標的總數：<b>${results.length}</b> 個\n\n`;
 
-        const MIN_VOLUME_USDT = 100000000;
+    if (results.length === 0) {
+      message += `<i>目前無符合條件之標的。</i>`;
+    } else {
+      const topResults = results.slice(0, 10);
+      topResults.forEach((item, index) => {
+        const chgSign = item.priceChange24h >= 0 ? '+' : '';
+        message += `<b>#${index + 1} ${item.symbol.replace('USDT', '')}</b>\n`;
+        message += `• 價格：<code>${item.price}</code> USDT\n`;
+        message += `• 距 60MA：<b>+${item.ma3DistPercent.toFixed(2)}%</b>\n`;
+        message += `• 24H 漲跌：${chgSign}${item.priceChange24h.toFixed(2)}%\n\n`;
+      });
 
-        window.addEventListener('DOMContentLoaded', () => {
-            initModalChart();
-            loadTgSettings();
-            scanAllMarketSMC();
-            startPollingLatestPrices();
+      if (results.length > 10) {
+        message += `<i>...剩餘 ${results.length - 10} 個標的請至網頁查看。</i>`;
+      }
+    }
+
+    try {
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text: message, parse_mode: 'HTML' })
+      });
+    } catch (err) {
+      console.error("Telegram 發送失敗:", err);
+    }
+  }
+
+  function calculateSMA(data, period) { 
+    const len = data.length; 
+    if (len < period) return new Array(len).fill(null); 
+    const ma = new Array(len).fill(null); 
+    let sum = 0; 
+    for (let i = 0; i < period; i++) sum += data[i]; 
+    ma[period - 1] = sum / period; 
+    for (let i = period; i < len; i++) { 
+      sum += data[i] - data[i - period]; 
+      ma[i] = sum / period; 
+    } 
+    return ma; 
+  } 
+
+  async function fetchSymbolDetailsData(symbol, signal) { 
+    try {
+      const res = await fetch(`${API_BASE}/fapi/v1/klines?symbol=${symbol}&interval=1h&limit=${P3 + 1}`, { signal }); 
+      if (!res.ok) return null; 
+      const klinesRaw = await res.json(); 
+      const totalLen = klinesRaw.length; 
+      if (totalLen < P3) return null; 
+
+      const closes = klinesRaw.map(k => parseFloat(k[4])); 
+      const price = closes[totalLen - 1]; 
+
+      const ma1 = calculateSMA(closes, P1)[totalLen - 1]; 
+      const ma2 = calculateSMA(closes, P2)[totalLen - 1]; 
+      const ma3 = calculateSMA(closes, P3)[totalLen - 1]; 
+
+      if (!(ma1 > ma2 && ma2 > ma3 && price >= ma3)) return null; 
+
+      const ma3DistPercent = ((price - ma3) / ma3) * 100; 
+      const ticker = tickerMap.get(symbol);
+      const priceChange24h = ticker ? parseFloat(ticker.priceChangePercent) : 0; 
+
+      return { symbol, price, ma3DistPercent, priceChange24h }; 
+    } catch {
+      return null;
+    }
+  } 
+
+  async function batchProcess(items, limit, fn, onProgress) {
+    const results = [];
+    let completed = 0;
+    
+    for (let i = 0; i < items.length; i += limit) {
+      const chunk = items.slice(i, i + limit);
+      const chunkResults = await Promise.all(chunk.map(item => fn(item)));
+      results.push(...chunkResults.filter(Boolean));
+      completed += chunk.length;
+      if (onProgress) onProgress(completed);
+    }
+    return results;
+  }
+
+  async function startScan() { 
+    if (isScanning) return;
+    isScanning = true;
+    dom.scanBtn.disabled = true; 
+    dom.scanBtn.innerText = "⚡ 掃描中..."; 
+    dom.symbolList.replaceChildren(); 
+    dom.progress.style.width = '0%';
+
+    try {
+      const res = await fetch(`${API_BASE}/fapi/v1/ticker/24hr`); 
+      if (res.ok) { 
+        const data = await res.json(); 
+        tickerMap.clear(); 
+        data.forEach(d => tickerMap.set(d.symbol, d)); 
+      } 
+    } catch {
+      dom.scanBtn.disabled = false;
+      dom.scanBtn.innerText = "啟動極速掃描";
+      isScanning = false;
+      return;
+    }
+
+    const candidateSymbols = Array.from(tickerMap.keys()).filter(sym => { 
+      if (!sym.endsWith('USDT')) return false; 
+      return parseFloat(tickerMap.get(sym).quoteVolume) > MIN_VOLUME; 
+    }); 
+
+    dom.statTotal.innerText = candidateSymbols.length; 
+
+    rawResults = await batchProcess(candidateSymbols, CONCURRENCY_LIMIT, (sym) => fetchSymbolDetailsData(sym), (completed) => {
+      dom.progress.style.width = `${(completed / candidateSymbols.length) * 100}%`; 
+    });
+
+    rawResults.sort((a, b) => a.ma3DistPercent - b.ma3DistPercent); 
+
+    dom.statEntry.innerText = rawResults.length; 
+    dom.scanBtn.disabled = false; 
+    dom.scanBtn.innerText = "啟動極速掃描"; 
+    renderList(); 
+
+    // 發送 Telegram 推播通知
+    sendTelegramNotification(rawResults);
+
+    isScanning = false;
+    resetCountdown();
+  } 
+
+  function renderList() { 
+    if (rawResults.length === 0) { 
+      dom.symbolList.innerHTML = `<div style="text-align:center; padding:40px; color:#64748b; font-weight:800;">目前無符合條件之標的</div>`; 
+      return; 
+    } 
+    const fragment = document.createDocumentFragment(); 
+    rawResults.forEach((item, index) => { 
+      const card = document.createElement('div'); 
+      card.className = 'symbol-card'; 
+      card.addEventListener('click', () => openChartModal(item.symbol)); 
+
+      const chg24Class = item.priceChange24h >= 0 ? 'val-up' : 'val-down'; 
+      const chg24Sign = item.priceChange24h >= 0 ? '+' : ''; 
+
+      card.innerHTML = ` 
+        <div style="flex: 1;"> 
+          <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;"> 
+            <span class="badge-rank">#${index + 1}</span> 
+            <span class="symbol-name">${item.symbol.replace('USDT','')}</span> 
+            <span class="badge-bull">🚀 1H 多頭排列</span> 
+          </div> 
+          <div class="detail-row"> 
+            距慢線 (60MA): <span class="val-up">+${item.ma3DistPercent.toFixed(2)}%</span> 
+          </div> 
+          <div class="detail-row"> 
+            24H 漲跌幅: <span class="${chg24Class}">${chg24Sign}${item.priceChange24h.toFixed(2)}%</span> 
+          </div> 
+        </div> 
+        <div style="text-align:right;"> 
+          <div class="symbol-price">${item.price}</div> 
+          <div style="font-size:0.7rem; color:var(--manga-cyan); margin-top:4px;">點擊看 K 線 📈</div>
+        </div> 
+      `; 
+      fragment.appendChild(card); 
+    }); 
+    dom.symbolList.replaceChildren(fragment); 
+  } 
+
+  // 定時器邏輯（60 秒計時）
+  function resetCountdown() {
+    countdownSec = 60;
+    dom.timerCount.innerText = `(${countdownSec}s)`;
+  }
+
+  function startTimer() {
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+      if (!dom.autoScanToggle.checked || isScanning) return;
+      countdownSec--;
+      if (countdownSec <= 0) {
+        startScan();
+      } else {
+        dom.timerCount.innerText = `(${countdownSec}s)`;
+      }
+    }, 1000);
+  }
+
+  window.toggleAutoScan = () => {
+    if (dom.autoScanToggle.checked) {
+      resetCountdown();
+    } else {
+      dom.timerCount.innerText = '(已停用)';
+    }
+  };
+
+  let activeChartController = null;
+  let currentSymbol = null;
+
+  async function drawKlineChart(symbol) {
+    if (activeChartController) activeChartController.abort();
+    activeChartController = new AbortController();
+
+    try {
+      const res = await fetch(`${API_BASE}/fapi/v1/klines?symbol=${symbol}&interval=1h&limit=${KLINE_SHOW_COUNT + P3}`, { signal: activeChartController.signal });
+      if (!res.ok) return;
+      const klines = await res.json();
+
+      const closes = klines.map(k => parseFloat(k[4]));
+      const volumes = klines.map(k => parseFloat(k[5]));
+
+      const ma5 = calculateSMA(closes, P0);
+      const ma30 = calculateSMA(closes, P1);
+      const ma45 = calculateSMA(closes, P2);
+      const ma60 = calculateSMA(closes, P3);
+
+      const vm5 = calculateSMA(volumes, 5);
+      const vm20 = calculateSMA(volumes, 20);
+
+      const lastPrice = closes[closes.length - 1];
+      const lastMA5 = ma5[ma5.length - 1];
+      const isAboveMA5 = lastPrice >= lastMA5;
+
+      if (lastPrice !== undefined && lastMA5 !== null) {
+        if (isAboveMA5) {
+          dom.ma5Badge.className = 'ma5-status-badge above';
+          dom.ma5Badge.innerText = '🟢 5MA 之上';
+        } else {
+          dom.ma5Badge.className = 'ma5-status-badge below';
+          dom.ma5Badge.innerText = '🔴 5MA 之下';
+        }
+      }
+
+      const showK = klines.slice(-KLINE_SHOW_COUNT);
+      const showMA5 = ma5.slice(-KLINE_SHOW_COUNT);
+      const showMA30 = ma30.slice(-KLINE_SHOW_COUNT);
+      const showMA45 = ma45.slice(-KLINE_SHOW_COUNT);
+      const showMA60 = ma60.slice(-KLINE_SHOW_COUNT);
+      const showVM5 = vm5.slice(-KLINE_SHOW_COUNT);
+      const showVM20 = vm20.slice(-KLINE_SHOW_COUNT);
+
+      const rect = dom.canvasWrapper.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      dom.canvas.width = rect.width * dpr;
+      dom.canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+
+      const width = rect.width;
+      const height = rect.height;
+
+      const padding = { top: 20, bottom: 15, left: 10, right: 60 };
+      const totalH = height - padding.top - padding.bottom;
+      
+      const priceH = totalH * 0.65;
+      const volH = totalH * 0.25;
+      const volTop = padding.top + priceH + totalH * 0.08;
+
+      const chartW = width - padding.left - padding.right;
+
+      let minP = Infinity, maxP = -Infinity;
+      showK.forEach(k => {
+        const l = parseFloat(k[3]), h = parseFloat(k[2]);
+        if (l < minP) minP = l;
+        if (h > maxP) maxP = h;
+      });
+
+      let maxVol = -Infinity;
+      showK.forEach(k => {
+        const v = parseFloat(k[5]);
+        if (v > maxVol) maxVol = v;
+      });
+
+      const priceRange = maxP - minP || 1;
+      const getYPrice = (p) => padding.top + priceH - ((p - minP) / priceRange) * priceH;
+      const getYVol = (v) => volTop + volH - (v / (maxVol || 1)) * volH;
+      const barWidth = chartW / KLINE_SHOW_COUNT;
+
+      ctx.clearRect(0, 0, width, height);
+
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+      ctx.fillStyle = '#64748b';
+      ctx.font = '10px JetBrains Mono';
+      ctx.textAlign = 'left';
+      ctx.lineWidth = 1;
+
+      const gridLines = 4;
+      for (let i = 0; i <= gridLines; i++) {
+        const y = padding.top + (priceH / gridLines) * i;
+        const pVal = maxP - (priceRange / gridLines) * i;
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(width - padding.right, y);
+        ctx.stroke();
+        ctx.fillText(pVal.toFixed(2), width - padding.right + 6, y + 3);
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(padding.left, volTop);
+      ctx.lineTo(width - padding.right, volTop);
+      ctx.stroke();
+      
+      const formatVol = (v) => v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : (v / 1e3).toFixed(0) + 'K';
+      ctx.fillText(formatVol(maxVol), width - padding.right + 6, volTop + 10);
+
+      showK.forEach((k, i) => {
+        const open = parseFloat(k[1]), high = parseFloat(k[2]), low = parseFloat(k[3]), close = parseFloat(k[4]), vol = parseFloat(k[5]);
+        const x = padding.left + i * barWidth + barWidth / 2;
+        const isUp = close >= open;
+        const color = isUp ? '#00ff66' : '#ff2a6d';
+
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+
+        ctx.beginPath();
+        ctx.moveTo(x, getYPrice(high));
+        ctx.lineTo(x, getYPrice(low));
+        ctx.stroke();
+
+        const yOpen = getYPrice(open);
+        const yClose = getYPrice(close);
+        const bodyTop = Math.min(yOpen, yClose);
+        const bodyH = Math.max(Math.abs(yOpen - yClose), 1.5);
+        const bw = Math.max(barWidth * 0.7, 1);
+
+        ctx.fillRect(x - bw / 2, bodyTop, bw, bodyH);
+
+        ctx.fillStyle = isUp ? 'rgba(0, 255, 102, 0.4)' : 'rgba(255, 42, 109, 0.4)';
+        const vY = getYVol(vol);
+        ctx.fillRect(x - bw / 2, vY, bw, volTop + volH - vY);
+      });
+
+      const drawLine = (dataArray, color, getYFunc, width = 1.5) => {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        let started = false;
+        dataArray.forEach((val, i) => {
+          if (val === null) return;
+          const x = padding.left + i * barWidth + barWidth / 2;
+          const y = getYFunc(val);
+          if (!started) { ctx.moveTo(x, y); started = true; } 
+          else { ctx.lineTo(x, y); }
         });
+        ctx.stroke();
+      };
 
-        function loadTgSettings() {
-            document.getElementById("tgBotToken").value = localStorage.getItem("SMC_TG_BOT_TOKEN") || "";
-            document.getElementById("tgChatId").value = localStorage.getItem("SMC_TG_CHAT_ID") || "";
-        }
+      drawLine(showMA5, '#00ff66', getYPrice);
+      drawLine(showMA30, '#ffea00', getYPrice);
+      drawLine(showMA45, '#ff9100', getYPrice);
+      drawLine(showMA60, '#ff007f', getYPrice);
 
-        function saveTgSettings() {
-            localStorage.setItem("SMC_TG_BOT_TOKEN", document.getElementById("tgBotToken").value.trim());
-            localStorage.setItem("SMC_TG_CHAT_ID", document.getElementById("tgChatId").value.trim());
-        }
+      drawLine(showVM5, '#00f0ff', getYVol, 1.2);
+      drawLine(showVM20, '#9d4edd', getYVol, 1.2);
 
-        async function sendTelegramMessage(text) {
-            const token = document.getElementById("tgBotToken").value.trim();
-            const chatId = document.getElementById("tgChatId").value.trim();
-            if (!token || !chatId) return false;
+    } catch (err) {
+      if (err.name !== 'AbortError') console.error(err);
+    }
+  }
 
-            try {
-                const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ chat_id: chatId, text: text, parse_mode: "HTML" })
-                });
-                const data = await res.json();
-                return data.ok;
-            } catch (err) {
-                return false;
-            }
-        }
+  function openChartModal(symbol) {
+    currentSymbol = symbol;
+    dom.symbolTitle.innerText = symbol;
+    dom.chartModal.classList.add('active');
+    dom.chartModal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('modal-open');
 
-        async function testTelegramNotification() {
-            saveTgSettings();
-            const ok = await sendTelegramMessage(`<b>🚨 短線突破掃描器 (15m/30m/1h) - 連線測試</b>\n\n🟢 測試成功！`);
-            alert(ok ? "✅ 發送成功！" : "❌ 發送失敗，請檢查 Token 與 Chat ID。");
-        }
+    drawKlineChart(symbol);
+  }
 
-        async function fetchHighVolumeSymbols() {
-            try {
-                const res = await fetch("https://fapi.binance.com/fapi/v1/ticker/24hr");
-                const data = await res.json();
-                
-                return data
-                    .filter(item => item.symbol.endsWith("USDT") && parseFloat(item.quoteVolume) >= MIN_VOLUME_USDT)
-                    .map(item => ({
-                        symbol: item.symbol,
-                        priceChangePercent: parseFloat(item.priceChangePercent),
-                        quoteVolume: parseFloat(item.quoteVolume)
-                    }));
-            } catch (err) {
-                return [];
-            }
-        }
+  function closeChartModal() {
+    if (activeChartController) activeChartController.abort();
+    dom.chartModal.classList.remove('active');
+    dom.chartModal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('modal-open');
+    currentSymbol = null;
+  }
 
-        // 解析 K 棒陣列
-        function parseKlines(raw) {
-            return raw.map(k => ({
-                time: k[0],
-                high: parseFloat(k[2]),
-                low: parseFloat(k[3]),
-                close: parseFloat(k[4]),
-                volume: parseFloat(k[5])
-            }));
-        }
+  dom.scanBtn.addEventListener('click', startScan);
+  dom.closeModalBtn.addEventListener('click', closeChartModal);
+  
+  dom.chartModal.addEventListener('click', (e) => {
+    if (e.target === dom.chartModal) closeChartModal();
+  });
+  
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && dom.chartModal.classList.contains('active')) {
+      closeChartModal();
+    }
+  });
 
-        async function scanAllMarketSMC() {
-            if (isScanning) return;
-            isScanning = true;
+  window.addEventListener('resize', () => {
+    if (dom.chartModal.classList.contains('active') && currentSymbol) {
+      drawKlineChart(currentSymbol);
+    }
+  });
 
-            const scanBtn = document.getElementById("scanBtn");
-            const progressContainer = document.getElementById("progressContainer");
-            const progressBar = document.getElementById("progressBar");
-
-            scanBtn.disabled = true;
-            progressContainer.style.display = "block";
-            progressBar.style.width = "0%";
-            marketDataMap = {}; 
-            renderTable();
-
-            logEvent("🌐 篩選 24h 成交額 ≥ 1 億 USDT 標的...");
-            const targetSymbols = await fetchHighVolumeSymbols();
-            logEvent(`⚡ 符合標的共 ${targetSymbols.length} 個，開始 (15m/30m/1h) 雙週期以上 20K 新高掃描...`);
-
-            const BATCH_SIZE = 10;
-            let completed = 0;
-
-            for (let i = 0; i < targetSymbols.length; i += BATCH_SIZE) {
-                const chunk = targetSymbols.slice(i, i + BATCH_SIZE);
-                await Promise.all(chunk.map(async (target) => {
-                    const symbol = target.symbol;
-                    try {
-                        // 同時獲取 15分(15m)、30分(30m)、1小時(1h) K 棒
-                        const [res15m, res30m, res1h] = await Promise.all([
-                            fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=15m&limit=30`),
-                            fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=30m&limit=30`),
-                            fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1h&limit=50`)
-                        ]);
-
-                        if (!res15m.ok || !res30m.ok || !res1h.ok) return;
-
-                        const klines15m = parseKlines(await res15m.json());
-                        const klines30m = parseKlines(await res30m.json());
-                        const klines1h = parseKlines(await res1h.json());
-
-                        const result = detectShortTermMultiTimeframe20NewHigh(klines15m, klines30m, klines1h);
-                        if (result) {
-                            const latestPrice = klines15m[klines15m.length - 1].close;
-                            marketDataMap[symbol] = {
-                                symbol: symbol,
-                                price: latestPrice,
-                                priceChangePercent: target.priceChangePercent,
-                                volumeUsdt: target.quoteVolume,
-                                strategyCode: result.code,
-                                strategyName: result.name,
-                                timeframe: "短線多週期",
-                                direction: result.direction,
-                                entry: latestPrice,
-                                stopLoss: result.stopLoss,
-                                cachedKlines: klines15m
-                            };
-                            checkAndSendTgAlert(symbol, result, latestPrice);
-                        }
-                    } catch (e) {
-                    } finally {
-                        completed++;
-                    }
-                }));
-
-                progressBar.style.width = `${Math.floor((completed / targetSymbols.length) * 100)}%`;
-                renderTable();
-                await new Promise(r => setTimeout(r, 20));
-            }
-
-            isScanning = false;
-            scanBtn.disabled = false;
-            progressContainer.style.display = "none";
-            logEvent(`🎉 掃描完成！獲得 ${Object.keys(marketDataMap).length} 個符合短線雙週期以上創20K新高標的。`);
-            renderTable();
-            updateHeaderTime();
-        }
-
-        function startPollingLatestPrices() {
-            if (pollingTimer) clearInterval(pollingTimer);
-            pollingTimer = setInterval(async () => {
-                if (Object.keys(marketDataMap).length === 0 || isScanning) return;
-                try {
-                    const res = await fetch("https://fapi.binance.com/fapi/v1/ticker/24hr");
-                    if (!res.ok) return;
-                    const allTickers = await res.json();
-                    
-                    allTickers.forEach(t => {
-                        if (marketDataMap[t.symbol]) {
-                            marketDataMap[t.symbol].price = parseFloat(t.lastPrice);
-                            marketDataMap[t.symbol].priceChangePercent = parseFloat(t.priceChangePercent);
-                            marketDataMap[t.symbol].volumeUsdt = parseFloat(t.quoteVolume);
-                        }
-                    });
-
-                    renderTable();
-                    updateHeaderTime();
-                } catch (e) {}
-            }, 5000);
-        }
-
-        function checkAndSendTgAlert(symbol, smc, price) {
-            const signalKey = `${symbol}_${smc.code}_${smc.direction}`;
-            if (notifiedSignals.has(signalKey)) return; 
-            notifiedSignals.add(signalKey); 
-
-            const stopLossPct = (Math.abs(price - smc.stopLoss) / price * 100).toFixed(2);
-
-            const tgMessage = 
-`🚀 <b>【短線雙週期以上創20K新高觸發】</b>
-
-📌 <b>標的</b>：<code>${symbol}</code>
-⚡ <b>戰法</b>：<b>${smc.name}</b>
-📈 <b>方向</b>：🟢 做多 (短線多週期強勢突破)
-💵 <b>現價</b>：<code>$${price} USDT</code>
-🛡️ <b>止損</b>：<code>$${smc.stopLoss} USDT</code> (${stopLossPct}%)`;
-
-            sendTelegramMessage(tgMessage);
-        }
-
-        // 核心邏輯：檢測 15m、30m、1h 是否有至少 2 個週期同時創下前 20 根 K 棒新高
-        function detectShortTermMultiTimeframe20NewHigh(klines15m, klines30m, klines1h) {
-            let hitCount = 0;
-            let hitLabels = [];
-
-            // 1. 檢查 15分 (15m) 是否創 20 根 K 棒新高
-            if (klines15m.length >= 21) {
-                const currentClose = klines15m[klines15m.length - 1].close;
-                const past20 = klines15m.slice(klines15m.length - 21, klines15m.length - 1);
-                const maxHigh20 = Math.max(...past20.map(k => k.high));
-                if (currentClose > maxHigh20) {
-                    hitCount++;
-                    hitLabels.push("15m");
-                }
-            }
-
-            // 2. 檢查 30分 (30m) 是否創 20 根 K 棒新高
-            if (klines30m.length >= 21) {
-                const currentClose = klines30m[klines30m.length - 1].close;
-                const past20 = klines30m.slice(klines30m.length - 21, klines30m.length - 1);
-                const maxHigh20 = Math.max(...past20.map(k => k.high));
-                if (currentClose > maxHigh20) {
-                    hitCount++;
-                    hitLabels.push("30m");
-                }
-            }
-
-            // 3. 檢查 1小時 (1h) 是否創 20 根 K 棒新高
-            if (klines1h.length >= 21) {
-                const currentClose = klines1h[klines1h.length - 1].close;
-                const past20 = klines1h.slice(klines1h.length - 21, klines1h.length - 1);
-                const maxHigh20 = Math.max(...past20.map(k => k.high));
-                if (currentClose > maxHigh20) {
-                    hitCount++;
-                    hitLabels.push("1h");
-                }
-            }
-
-            // 只要有 2 個（含）以上週期創 20 根 K 棒新高即符合條件
-            if (hitCount >= 2) {
-                const currentPrice = klines15m[klines15m.length - 1].close;
-                // 自動計算短線支撐止損（採 15m 前 20 根高點與 99.2% 取低值）
-                const past20_15m = klines15m.slice(klines15m.length - 21, klines15m.length - 1);
-                const maxHigh20_15m = Math.max(...past20_15m.map(k => k.high));
-                const stopLossVal = Math.min(maxHigh20_15m * 0.995, currentPrice * 0.985);
-
-                return {
-                    code: "MULTI_NEW_HIGH",
-                    name: `突破20K新高(${hitLabels.join('+')})`,
-                    direction: "LONG",
-                    stopLoss: parseFloat(stopLossVal.toFixed(4))
-                };
-            }
-
-            return null;
-        }
-
-        function renderTable() {
-            const filter = document.getElementById("strategyFilter").value;
-            const tbody = document.getElementById("scannerTableBody");
-            const fragment = document.createDocumentFragment();
-
-            const allItems = Object.values(marketDataMap);
-            document.getElementById("longCount").innerText = `(${allItems.length})`;
-
-            allItems.sort((a, b) => b.priceChangePercent - a.priceChangePercent);
-
-            allItems.forEach(item => {
-                if (filter !== "ALL" && item.strategyCode !== filter) return;
-
-                const tr = document.createElement("tr");
-                tr.onclick = () => openTradeModal(item);
-
-                const changeColor = item.priceChangePercent >= 0 ? "var(--accent-green)" : "var(--accent-red)";
-                const changeSign = item.priceChangePercent >= 0 ? "+" : "";
-                const volIn100M = (item.volumeUsdt / 100000000).toFixed(1);
-
-                tr.innerHTML = `
-                    <td style="font-weight:600; color:#fff;">${item.symbol.replace('USDT','')}</td>
-                    <td style="color:${changeColor}; font-weight:600;">${changeSign}${item.priceChangePercent.toFixed(2)}%</td>
-                    <td style="color:var(--accent-yellow);">${volIn100M}億</td>
-                    <td><span class="tag tag-strategy">${item.strategyName}</span></td>
-                    <td><button style="padding: 4px 8px; font-size: 11px;" onclick="event.stopPropagation(); openTradeModal(marketDataMap['${item.symbol}']);">📊 試算</button></td>
-                `;
-                fragment.appendChild(tr);
-            });
-
-            tbody.innerHTML = "";
-            tbody.appendChild(fragment);
-        }
-
-        function openTradeModal(item) {
-            if (!item) return;
-            currentModalItem = item;
-            document.getElementById("modalTitle").innerHTML = `🎯 ${item.symbol} <span class="tag tag-bull">LONG</span>`;
-            
-            const modal = document.getElementById("tradeModal");
-            modal.style.display = "flex";
-
-            if (item.cachedKlines && item.cachedKlines.length > 0) {
-                renderModalChartFromCache(item.cachedKlines);
-            } else {
-                loadModalChartData(item.symbol);
-            }
-        }
-
-        function closeModal() {
-            document.getElementById("tradeModal").style.display = "none";
-        }
-
-        function handleOverlayClick(e) {
-            if (e.target.classList.contains('modal-overlay')) closeModal();
-        }
-
-        function calculateTradePlan() {
-            if (!currentModalItem) return;
-
-            const entry = currentModalItem.price;
-            const sl = currentModalItem.stopLoss;
-
-            const lossUsdt = parseFloat(document.getElementById("inputLossUsdt").value) || 0;
-            const leverage = parseFloat(document.getElementById("inputLeverage").value) || 1;
-            const rr = parseFloat(document.getElementById("inputRR").value) || 1;
-
-            const priceRiskRatio = Math.abs(entry - sl) / entry;
-            let tp = entry + (entry - sl) * rr;
-            let positionSize = priceRiskRatio > 0 ? lossUsdt / priceRiskRatio : 0;
-            let margin = positionSize / leverage;
-            let profitUsdt = lossUsdt * rr;
-
-            document.getElementById("resEntry").innerText = `$${entry}`;
-            document.getElementById("resLeverage").innerText = `${leverage}x`;
-            document.getElementById("resMargin").innerText = `$${margin.toFixed(2)} USDT`;
-            document.getElementById("resPositionSize").innerText = `$${positionSize.toFixed(2)} USDT`;
-            
-            document.getElementById("resStopLoss").innerText = `$${sl}`;
-            document.getElementById("resStopLossAmount").innerText = `-$${lossUsdt.toFixed(2)} USDT`;
-            
-            document.getElementById("resTakeProfit").innerText = `$${tp.toFixed(4)}`;
-            document.getElementById("resTakeProfitAmount").innerText = `+$${profitUsdt.toFixed(2)} USDT`;
-
-            updateModalChartLines(entry, sl, tp);
-        }
-
-        function renderModalChartFromCache(klines) {
-            const recentKlines = klines.slice(-50);
-            const closePrices = recentKlines.map(k => k.close);
-            const times = recentKlines.map(k => {
-                const date = new Date(k.time);
-                return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-            });
-
-            modalChartInstance.data.labels = times;
-            modalChartInstance.data.datasets[0].data = closePrices;
-            calculateTradePlan();
-        }
-
-        function loadModalChartData(symbol) {
-            fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=15m&limit=50`)
-                .then(res => res.json())
-                .then(data => {
-                    const closePrices = data.map(k => parseFloat(k[4]));
-                    const times = data.map(k => {
-                        const date = new Date(k[0]);
-                        return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-                    });
-
-                    modalChartInstance.data.labels = times;
-                    modalChartInstance.data.datasets[0].data = closePrices;
-                    calculateTradePlan();
-                });
-        }
-
-        function updateModalChartLines(entry, sl, tp) {
-            if (!modalChartInstance || modalChartInstance.data.labels.length === 0) return;
-            const count = modalChartInstance.data.labels.length;
-
-            modalChartInstance.data.datasets[1].data = Array(count).fill(tp);
-            modalChartInstance.data.datasets[2].data = Array(count).fill(entry);
-            modalChartInstance.data.datasets[3].data = Array(count).fill(sl);
-            modalChartInstance.update();
-        }
-
-        function initModalChart() {
-            const ctx = document.getElementById('modalChart').getContext('2d');
-            modalChartInstance = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: [],
-                    datasets: [
-                        { label: '收盤價', data: [], borderColor: '#58a6ff', borderWidth: 2, tension: 0.1 },
-                        { label: 'TP', data: [], borderColor: '#2ea043', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0 },
-                        { label: 'Entry', data: [], borderColor: '#388bfd', borderWidth: 1.5, pointRadius: 0 },
-                        { label: 'SL', data: [], borderColor: '#da3633', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0 }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    animation: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { grid: { color: '#30363d' }, ticks: { color: '#8b949e', font: { size: 9 } } },
-                        y: { grid: { color: '#30363d' }, ticks: { color: '#8b949e', font: { size: 9 } } }
-                    }
-                }
-            });
-        }
-
-        function updateHeaderTime() {
-            document.getElementById("lastUpdate").innerText = `最後更新: ${new Date().toTimeString().split(' ')[0]}`;
-        }
-
-        function logEvent(msg) {
-            const feed = document.getElementById("logFeed");
-            const div = document.createElement("div");
-            div.innerHTML = `<span style="color:var(--text-secondary)">[${new Date().toTimeString().split(' ')[0]}]</span> ${msg}`;
-            feed.prepend(div);
-        }
-    </script>
-</body>
+  // 初始化
+  loadConfig();
+  startTimer();
+  startScan();
+})();
+</script> 
+</body> 
 </html>
